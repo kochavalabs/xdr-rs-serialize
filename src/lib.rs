@@ -14,6 +14,7 @@ pub enum Error {
     UnsignedHyperBadFormat,
     VarOpaqueBadFormat,
     FixedArrayWrongSize,
+    VarArrayWrongSize,
 
     BadArraySize,
     InvalidPadding,
@@ -158,6 +159,17 @@ pub fn write_fixed_array<Out: Write, T: XDROut<Out>>(
     }
     written += pad(written, out)?;
     Ok(written)
+}
+
+pub fn write_var_array<Out: Write, T: XDROut<Out>>(
+    val: &Vec<T>,
+    size: u32,
+    out: &mut Out,
+) -> Result<u64, Error> {
+    if val.len() as u32 >= size {
+        return Err(Error::VarArrayWrongSize);
+    }
+    val.write_xdr(out)
 }
 
 #[cfg(test)]
@@ -329,9 +341,7 @@ mod tests {
     #[test]
     fn test_fixed_array_good() {
         let mut to_ser = TestFixed::default();
-        to_ser.vector.push(1);
-        to_ser.vector.push(2);
-        to_ser.vector.push(3);
+        to_ser.vector.extend(vec![1, 2, 3]);
         let expected: Vec<u8> = vec![0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3];
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_xdr(&mut actual).unwrap();
@@ -343,7 +353,7 @@ mod tests {
         let to_ser = TestFixed::default();
         let mut actual: Vec<u8> = Vec::new();
         let result = to_ser.write_xdr(&mut actual);
-        assert_eq!(result, Err(Error::FixedArrayWrongSize));
+        assert_eq!(Err(Error::FixedArrayWrongSize), result);
     }
 
     #[test]
@@ -356,6 +366,31 @@ mod tests {
             0, 0, 0, 2, 0x3f, 0x80, 0, 0, 0, 0, 0, 2, 0x3f, 0x80, 0, 0, 0, 0, 0, 3,
         ];
         let mut actual: Vec<u8> = Vec::new();
+        to_ser.write_xdr(&mut actual).unwrap();
+        assert_eq!(expected, actual);
+    }
+
+    #[derive(Default, XDROut)]
+    struct TestVarOverflow {
+        #[array(var = 3)]
+        pub vector: Vec<u32>,
+    }
+
+    #[test]
+    fn test_var_array_overflow() {
+        let mut to_ser = TestVarOverflow::default();
+        to_ser.vector.extend(vec![1, 2, 3, 4]);
+        let mut actual: Vec<u8> = Vec::new();
+        let result = to_ser.write_xdr(&mut actual);
+        assert_eq!(Err(Error::VarArrayWrongSize), result);
+    }
+
+    #[test]
+    fn test_var_array_underflow() {
+        let mut to_ser = TestVarOverflow::default();
+        to_ser.vector.extend(vec![1, 2]);
+        let mut actual: Vec<u8> = Vec::new();
+        let expected: Vec<u8> = vec![0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 2];
         to_ser.write_xdr(&mut actual).unwrap();
         assert_eq!(expected, actual);
     }

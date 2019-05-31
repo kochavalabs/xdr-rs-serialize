@@ -89,7 +89,13 @@ fn impl_xdr_out_macro(ast: &syn::DeriveInput) -> TokenStream {
             )
             .parse()
             .unwrap(),
-            _ => "asdf".to_string().parse().unwrap(),
+            (name, 0, var) => format!(
+                "written += write_var_array(&self.{}, {}, out)?;",
+                name, var
+            )
+            .parse()
+            .unwrap(),
+            _ => "".to_string().parse().unwrap(),
         })
         .collect();
     let gen = quote! {
