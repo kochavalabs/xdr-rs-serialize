@@ -15,6 +15,7 @@ pub enum Error {
     VarOpaqueBadFormat,
     FixedArrayWrongSize,
     VarArrayWrongSize,
+    InvalidEnumValue,
 
     BadArraySize,
     InvalidPadding,
@@ -393,5 +394,42 @@ mod tests {
         let expected: Vec<u8> = vec![0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 2];
         to_ser.write_xdr(&mut actual).unwrap();
         assert_eq!(expected, actual);
+    }
+
+    #[derive(XDROut)]
+    enum TestEnum {
+        Zero = 0,
+        One = 1,
+        Two = 2,
+    }
+
+    #[test]
+    fn test_enum() {
+        let expected_zero: Vec<u8> = vec![0, 0, 0, 0];
+        let mut actual_zero: Vec<u8> = Vec::new();
+        TestEnum::Zero.write_xdr(&mut actual_zero).unwrap();
+        assert_eq!(expected_zero, actual_zero);
+
+        let expected_one: Vec<u8> = vec![0, 0, 0, 1];
+        let mut actual_one: Vec<u8> = Vec::new();
+        TestEnum::One.write_xdr(&mut actual_one).unwrap();
+        assert_eq!(expected_one, actual_one);
+
+        let expected_two: Vec<u8> = vec![0, 0, 0, 2];
+        let mut actual_two: Vec<u8> = Vec::new();
+        TestEnum::Two.write_xdr(&mut actual_two).unwrap();
+        assert_eq!(expected_two, actual_two);
+    }
+
+    #[derive(XDROut)]
+    enum TestEnumBad {
+        Value,
+    }
+
+    #[test]
+    fn test_enum_bad() {
+        let mut buffer: Vec<u8> = Vec::new();
+        let result = TestEnumBad::Value.write_xdr(&mut buffer);
+        assert_eq!(Err(Error::InvalidEnumValue), result);
     }
 }
