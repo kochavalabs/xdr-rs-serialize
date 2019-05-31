@@ -4,7 +4,7 @@
 
 - Integer [ser]
 - Unsigned Integer [ser]
-- Enumeration []
+- Enumeration [ser]
 - Boolean [ser]
 - Hyper Integer [ser]
 - Hyper Unsigned Integer [ser]
@@ -17,6 +17,6 @@
 - Fixed-Length Array [ser]
 - Variable-Length Array [ser]
 - Structure [ser]
-- Discriminated Union []
+- Discriminated Union [ser]
 - Void [ser]
-- Optional-Data []
+- Optional-Data [ser]

@@ -42,6 +42,7 @@ fn get_meta_items(attr: &syn::Attribute) -> Option<Vec<syn::NestedMeta>> {
 
 fn get_enums(data: &syn::DataEnum) -> Result<Vec<Enum>, ()> {
     let mut members = Vec::new();
+    let mut index: u32 = 0;
     for variant in &data.variants {
         match (&variant.fields, &variant.discriminant) {
             (syn::Fields::Unit, Some(expr)) => match expr.1 {
@@ -55,6 +56,14 @@ fn get_enums(data: &syn::DataEnum) -> Result<Vec<Enum>, ()> {
                 },
                 _ => {}
             },
+            (syn::Fields::Unnamed(_), _) => {
+                members.push(Enum {
+                    unit: false,
+                    index: index,
+                    name: variant.ident.clone(),
+                });
+                index += 1;
+            }
             _ => {}
         }
     }
@@ -73,8 +82,12 @@ fn get_calls_enum(data: &syn::DataEnum) -> Result<Vec<proc_macro2::TokenStream>,
                         .unwrap(),
                 );
             }
-            _ => {
-                return Err(());
+            (name, false, i) => {
+                result.push(
+                    format!("{}(ref val) => {{{}.write_xdr(out)?; val.write_xdr(out)}},", name, i)
+                        .parse()
+                        .unwrap(),
+                );
             }
         }
     }

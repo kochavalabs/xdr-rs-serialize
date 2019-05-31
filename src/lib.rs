@@ -432,4 +432,24 @@ mod tests {
         let result = TestEnumBad::Value.write_xdr(&mut buffer);
         assert_eq!(Err(Error::InvalidEnumValue), result);
     }
+
+    #[derive(XDROut)]
+    enum TestUnion {
+        First(u32),
+        Second(TestStruct),
+    }
+
+    #[test]
+    fn test_union() {
+        let expected_first: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 3];
+        let mut actual_first: Vec<u8> = Vec::new();
+        TestUnion::First(3).write_xdr(&mut actual_first).unwrap();
+        assert_eq!(expected_first, actual_first);
+
+        let mut actual_second: Vec<u8> = Vec::new();
+        let to_ser = TestStruct { one: 1.0, two: 2 };
+        let expected_second: Vec<u8> = vec![0,0,0,1,0x3f, 0x80, 0, 0, 0, 0, 0, 2];
+        TestUnion::Second(to_ser).write_xdr(&mut actual_second).unwrap();
+        assert_eq!(expected_second, actual_second);
+    }
 }
