@@ -1,0 +1,13 @@
+[package]
+name = "ex-dee-derive"
+version = "0.1.0"
+authors = ["Kyle Bartush <kbartush@kochava.com>"]
+edition = "2018"
+
+[dependencies]
+syn = { version = "0.15.12" , features = ["full", "extra-traits", "parsing"] }
+quote = "0.6.8"
+proc-macro2 = "0.4"
+
+[lib]
+proc-macro = true

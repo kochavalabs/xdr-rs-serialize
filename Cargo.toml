@@ -1,0 +1,8 @@
+[package]
+name = "ex-dee"
+version = "0.1.0"
+authors = ["Kyle Bartush <kbartush@kochava.com>"]
+edition = "2018"
+
+[dependencies]
+ex-dee-derive = { path = "ex-dee-derive" }
