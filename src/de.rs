@@ -135,6 +135,21 @@ impl<In: Read, T: XDRIn<In> + Sized> XDRIn<In> for Vec<T> {
     }
 }
 
+pub fn read_fixed_array<In: Read, T: XDRIn<In>>(
+    size: u32,
+    buffer: &mut In,
+) -> Result<(Vec<T>, u64), Error> {
+    let mut read = 0;
+    let mut result = Vec::new();
+    for _ in 0..size {
+        let t_res = T::read_xdr(buffer)?;
+        read += t_res.1;
+        result.push(t_res.0);
+    }
+    let pad = consume_padding(read, buffer)?;
+    Ok((result, read + pad.1))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -345,6 +360,75 @@ mod tests {
             Err(Error::InvalidEnumValue),
             TestEnum::read_xdr(&mut &to_des3[..])
         );
+    }
+
+    #[derive(XDRIn, Debug, PartialEq)]
+    struct TestFixedOpaqueNoPadding {
+        #[array(fixed = 8)]
+        pub opaque: Vec<u8>,
+    }
+
+    #[test]
+    fn test_fixed_opaque_no_padding() {
+        let to_des: Vec<u8> = vec![3, 3, 3, 4, 1, 2, 3, 4];
+        let expected = TestFixedOpaqueNoPadding {
+            opaque: vec![3, 3, 3, 4, 1, 2, 3, 4],
+        };
+        let result = TestFixedOpaqueNoPadding::read_xdr(&mut &to_des[..]).unwrap();
+        assert_eq!((expected, 8), result);
+    }
+
+    #[test]
+    fn test_fixed_opaque_no_padding_error() {
+        let to_des: Vec<u8> = vec![3, 3, 3, 4, 1, 2, 3];
+        let result = TestFixedOpaqueNoPadding::read_xdr(&mut &to_des[..]);
+        assert_eq!(Err(Error::ByteBadFormat), result);
+    }
+
+    #[derive(XDRIn, Debug, PartialEq)]
+    struct TestFixedOpaquePadding {
+        #[array(fixed = 5)]
+        pub opaque: Vec<u8>,
+    }
+
+    #[test]
+    fn test_fixed_opaque_padding() {
+        let to_des: Vec<u8> = vec![3, 3, 3, 4, 1, 0, 0, 0];
+        let expected = TestFixedOpaquePadding {
+            opaque: vec![3, 3, 3, 4, 1],
+        };
+        let result = TestFixedOpaquePadding::read_xdr(&mut &to_des[..]).unwrap();
+        assert_eq!((expected, 8), result);
+    }
+
+    #[test]
+    fn test_fixed_opaque_padding_error() {
+        let to_des: Vec<u8> = vec![3, 3, 3, 4, 1, 0, 0];
+        let result = TestFixedOpaquePadding::read_xdr(&mut &to_des[..]);
+        assert_eq!(Err(Error::InvalidPadding), result);
+    }
+
+    #[derive(XDRIn, Debug, PartialEq)]
+    struct TestFixedArray {
+        #[array(fixed = 3)]
+        pub data: Vec<u32>,
+    }
+
+    #[test]
+    fn test_fixed_array() {
+        let to_des: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 3];
+        let result = TestFixedArray::read_xdr(&mut &to_des[..]).unwrap();
+        let expected = TestFixedArray {
+            data: vec![0, 1, 3],
+        };
+        assert_eq!((expected, 12), result);
+    }
+
+    #[test]
+    fn test_fixed_array_error() {
+        let to_des: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
+        let result = TestFixedArray::read_xdr(&mut &to_des[..]);
+        assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
     }
 
 }

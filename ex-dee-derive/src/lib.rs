@@ -79,13 +79,20 @@ fn get_enums(data: &syn::DataEnum) -> Result<Vec<Enum>, ()> {
     Ok(members)
 }
 
-fn get_calls_enum_in(data: &syn::DataEnum, enum_name: &syn::Ident) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+fn get_calls_enum_in(
+    data: &syn::DataEnum,
+    enum_name: &syn::Ident,
+) -> Result<Vec<proc_macro2::TokenStream>, ()> {
     let enums = get_enums(data)?;
     let mut result = Vec::new();
     for enu in enums.iter() {
         match (&enu.name, enu.unit, enu.index) {
             (name, true, i) => {
-                result.push(format!("{} => Ok(({}::{}, 4)),", i, enum_name, name).parse().unwrap());
+                result.push(
+                    format!("{} => Ok(({}::{}, 4)),", i, enum_name, name)
+                        .parse()
+                        .unwrap(),
+                );
             }
             (_name, false, _i) => {}
         }
@@ -188,7 +195,15 @@ fn get_calls_struct_in(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenS
         .map(|i| match (&i.name, i.fixed, i.var, &i.v_type) {
             (name, 0, 0, v_type) => format!(
                 "let {}_result = {}::read_xdr(buffer)?; read += {}_result.1;",
-                name, v_type, name
+                name,
+                v_type.to_string().replace("<", "::<"),
+                name
+            )
+            .parse()
+            .unwrap(),
+            (name, fixed, 0, v_type) => format!(
+                "let {}_result: ({}, u64) = read_fixed_array({}, buffer)?; read += {}_result.1;",
+                name, v_type, fixed, name
             )
             .parse()
             .unwrap(),
@@ -201,8 +216,7 @@ fn get_struct_build_in(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenS
     Ok(members
         .iter()
         .map(|i| match (&i.name, i.fixed, i.var) {
-            (name, 0, 0) => format!("{}: {}_result.0,", name, name).parse().unwrap(),
-            _ => "".to_string().parse().unwrap(),
+            (name, _, _) => format!("{}: {}_result.0,", name, name).parse().unwrap(),
         })
         .collect())
 }
