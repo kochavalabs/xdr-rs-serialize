@@ -6,6 +6,9 @@ pub enum Error {
     UnsignedIntegerBadFormat,
     HyperBadFormat,
     UnsignedHyperBadFormat,
+    FloatBadFormat,
+    DoubleBadFormat,
+
     VarOpaqueBadFormat,
     FixedArrayWrongSize,
     VarArrayWrongSize,

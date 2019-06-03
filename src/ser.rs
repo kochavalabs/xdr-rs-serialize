@@ -84,7 +84,7 @@ impl<Out: Write> XDROut<Out> for f32 {
     fn write_xdr(&self, out: &mut Out) -> Result<u64, Error> {
         match out.write(&self.to_bits().to_be_bytes()) {
             Ok(4) => Ok(4),
-            _ => Err(Error::UnsignedHyperBadFormat),
+            _ => Err(Error::FloatBadFormat),
         }
     }
 }
@@ -93,7 +93,7 @@ impl<Out: Write> XDROut<Out> for f64 {
     fn write_xdr(&self, out: &mut Out) -> Result<u64, Error> {
         match out.write(&self.to_bits().to_be_bytes()) {
             Ok(8) => Ok(8),
-            _ => Err(Error::UnsignedHyperBadFormat),
+            _ => Err(Error::DoubleBadFormat),
         }
     }
 }

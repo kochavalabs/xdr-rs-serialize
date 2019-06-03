@@ -56,6 +56,26 @@ impl<In: Read> XDRIn<In> for u64 {
     }
 }
 
+impl<In: Read> XDRIn<In> for f32 {
+    fn read_xdr(buffer: &mut In) -> Result<Self, Error> {
+        let mut i_bytes = [0; 4];
+        match buffer.read_exact(&mut i_bytes) {
+            Ok(_) => Ok(f32::from_bits(u32::from_be_bytes(i_bytes))),
+            _ => Err(Error::FloatBadFormat),
+        }
+    }
+}
+
+impl<In: Read> XDRIn<In> for f64 {
+    fn read_xdr(buffer: &mut In) -> Result<Self, Error> {
+        let mut i_bytes = [0; 8];
+        match buffer.read_exact(&mut i_bytes) {
+            Ok(_) => Ok(f64::from_bits(u64::from_be_bytes(i_bytes))),
+            _ => Err(Error::DoubleBadFormat),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -121,10 +141,7 @@ mod tests {
     #[test]
     fn test_hyper_error() {
         let to_des: Vec<u8> = vec![255, 255, 255, 255, 255, 255, 255];
-        assert_eq!(
-            Err(Error::HyperBadFormat),
-            i64::read_xdr(&mut &to_des[..])
-        );
+        assert_eq!(Err(Error::HyperBadFormat), i64::read_xdr(&mut &to_des[..]));
     }
 
     #[test]
@@ -142,4 +159,27 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_float() {
+        let to_des: Vec<u8> = vec![0x3f, 0x80, 0, 0];
+        assert_eq!(1.0, f32::read_xdr(&mut &to_des[..]).unwrap());
+    }
+
+    #[test]
+    fn test_float_error() {
+        let to_des: Vec<u8> = vec![255, 255, 255];
+        assert_eq!(Err(Error::FloatBadFormat), f32::read_xdr(&mut &to_des[..]));
+    }
+
+    #[test]
+    fn test_double() {
+        let to_des: Vec<u8> = vec![0x3f, 0xf0, 0, 0, 0, 0, 0, 0];
+        assert_eq!(1.0, f64::read_xdr(&mut &to_des[..]).unwrap());
+    }
+
+    #[test]
+    fn test_double_error() {
+        let to_des: Vec<u8> = vec![255, 255, 255, 255, 255, 255, 255];
+        assert_eq!(Err(Error::DoubleBadFormat), f64::read_xdr(&mut &to_des[..]));
+    }
 }
