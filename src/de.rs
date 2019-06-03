@@ -25,6 +25,12 @@ fn consume_padding<In: Read>(read: u64, buffer: &mut In) -> Result<((), u64), Er
     }
 }
 
+impl<In: Read> XDRIn<In> for () {
+    fn read_xdr(_buffer: &mut In) -> Result<(Self, u64), Error> {
+        Ok(((), 0))
+    }
+}
+
 impl<In: Read> XDRIn<In> for bool {
     fn read_xdr(buffer: &mut In) -> Result<(Self, u64), Error> {
         match i32::read_xdr(buffer) {
@@ -431,4 +437,9 @@ mod tests {
         assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
     }
 
+    #[test]
+    fn test_void() {
+        let to_des: Vec<u8> = vec![];
+        assert_eq!(((),0), <()>::read_xdr(&mut &to_des[..]).unwrap());
+    }
 }
