@@ -10,6 +10,7 @@ pub enum Error {
     UnsignedHyperBadFormat,
     FloatBadFormat,
     DoubleBadFormat,
+    StringBadFormat,
 
     VarOpaqueBadFormat,
     FixedArrayWrongSize,

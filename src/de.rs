@@ -105,6 +105,21 @@ impl<In: Read> XDRIn<In> for f64 {
     }
 }
 
+impl<In: Read> XDRIn<In> for String {
+    fn read_xdr(buffer: &mut In) -> Result<(Self, u64), Error> {
+        let size = u32::read_xdr(buffer)?.0;
+        let mut read: u64 = 4;
+        let mut to_read: Vec<u8> = vec![0; size as usize];
+        let result = match buffer.read_exact(&mut to_read) {
+            Ok(_) => Ok(String::from_utf8(to_read)),
+            _ => return Err(Error::StringBadFormat),
+        }?;
+        read += size as u64;
+        let pad = consume_padding(read, buffer)?;
+        Ok((result.unwrap(), read + pad.1))
+    }
+}
+
 impl<In: Read, T: XDRIn<In> + Sized> XDRIn<In> for Vec<T> {
     fn read_xdr(buffer: &mut In) -> Result<(Self, u64), Error> {
         let size = u32::read_xdr(buffer)?.0;
@@ -274,5 +289,14 @@ mod tests {
         let to_des: Vec<u8> = vec![0x3f, 0x80, 0, 0, 0, 0, 0];
         let result: Result<(TestStruct, u64), Error> = TestStruct::read_xdr(&mut &to_des[..]);
         assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
+    }
+
+    #[test]
+    fn test_string() {
+        let to_des: Vec<u8> = vec![0, 0, 0, 5, 104, 101, 108, 108, 111, 0, 0, 0];
+        assert_eq!(
+            ("hello".to_string(), 12),
+            String::read_xdr(&mut &to_des[..]).unwrap()
+        );
     }
 }

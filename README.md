@@ -13,7 +13,7 @@
 - Quadruple-Precision Floating Point []
 - Fixed Length Opaque [ser]
 - Variable-Length Opaque [ser, des]
-- String [ser]
+- String [ser, des]
 - Fixed-Length Array [ser]
 - Variable-Length Array [ser, des]
 - Structure [ser, des]
