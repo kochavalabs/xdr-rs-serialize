@@ -3,11 +3,11 @@
 ## Types
 
 - Integer [ser, des]
-- Unsigned Integer [ser]
+- Unsigned Integer [ser, des]
 - Enumeration [ser]
 - Boolean [ser, des]
-- Hyper Integer [ser]
-- Hyper Unsigned Integer [ser]
+- Hyper Integer [ser, des]
+- Hyper Unsigned Integer [ser, des]
 - Floating-Point [ser]
 - Double-Precision Floating-Point [ser]
 - Quadruple-Precision Floating Point []
