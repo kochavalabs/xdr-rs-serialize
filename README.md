@@ -2,10 +2,10 @@
 
 ## Types
 
-- Integer [ser]
+- Integer [ser, des]
 - Unsigned Integer [ser]
 - Enumeration [ser]
-- Boolean [ser]
+- Boolean [ser, des]
 - Hyper Integer [ser]
 - Hyper Unsigned Integer [ser]
 - Floating-Point [ser]
