@@ -4,10 +4,10 @@ extern crate proc_macro;
 
 use crate::proc_macro::TokenStream;
 use quote::quote;
+use quote::ToTokens;
 use syn;
 use syn::Meta::{List, NameValue};
 use syn::NestedMeta::Meta;
-use quote::ToTokens;
 
 #[proc_macro_derive(XDROut, attributes(array))]
 pub fn xdr_out_macro_derive(input: TokenStream) -> TokenStream {
@@ -79,7 +79,21 @@ fn get_enums(data: &syn::DataEnum) -> Result<Vec<Enum>, ()> {
     Ok(members)
 }
 
-fn get_calls_enum(data: &syn::DataEnum) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+fn get_calls_enum_in(data: &syn::DataEnum, enum_name: &syn::Ident) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+    let enums = get_enums(data)?;
+    let mut result = Vec::new();
+    for enu in enums.iter() {
+        match (&enu.name, enu.unit, enu.index) {
+            (name, true, i) => {
+                result.push(format!("{} => Ok(({}::{}, 4)),", i, enum_name, name).parse().unwrap());
+            }
+            (_name, false, _i) => {}
+        }
+    }
+    Ok(result)
+}
+
+fn get_calls_enum_out(data: &syn::DataEnum) -> Result<Vec<proc_macro2::TokenStream>, ()> {
     let enums = get_enums(data)?;
     let mut result = Vec::new();
     for enu in enums.iter() {
@@ -172,9 +186,12 @@ fn get_calls_struct_in(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenS
     Ok(members
         .iter()
         .map(|i| match (&i.name, i.fixed, i.var, &i.v_type) {
-            (name, 0, 0, v_type) => format!("let {}_result = {}::read_xdr(buffer)?; read += {}_result.1;", name, v_type, name)
-                .parse()
-                .unwrap(),
+            (name, 0, 0, v_type) => format!(
+                "let {}_result = {}::read_xdr(buffer)?; read += {}_result.1;",
+                name, v_type, name
+            )
+            .parse()
+            .unwrap(),
             _ => "".to_string().parse().unwrap(),
         })
         .collect())
@@ -184,9 +201,7 @@ fn get_struct_build_in(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenS
     Ok(members
         .iter()
         .map(|i| match (&i.name, i.fixed, i.var) {
-            (name, 0, 0) => format!("{}: {}_result.0,", name, name)
-                .parse()
-                .unwrap(),
+            (name, 0, 0) => format!("{}: {}_result.0,", name, name).parse().unwrap(),
             _ => "".to_string().parse().unwrap(),
         })
         .collect())
@@ -208,7 +223,7 @@ fn impl_xdr_out_macro(ast: &syn::DeriveInput) -> TokenStream {
             }
         }
         syn::Data::Enum(data) => {
-            let matches = get_calls_enum(data).unwrap();
+            let matches = get_calls_enum_out(data).unwrap();
             let names = std::iter::repeat(name);
             quote! {
                 impl<Out: Write> XDROut<Out> for #name {
@@ -227,9 +242,9 @@ fn impl_xdr_out_macro(ast: &syn::DeriveInput) -> TokenStream {
 }
 
 fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
+    let name = &ast.ident;
     let gen = match &ast.data {
         syn::Data::Struct(data) => {
-            let name = &ast.ident;
             let calls = get_calls_struct_in(data).unwrap();
             let struct_build = get_struct_build_in(data).unwrap();
             quote! {
@@ -246,6 +261,20 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
                     }
                 }
 
+            }
+        }
+        syn::Data::Enum(data) => {
+            let matches = get_calls_enum_in(data, name).unwrap();
+            quote! {
+                impl<In: Read> XDRIn<In> for #name {
+                    fn read_xdr(buffer: &mut In) -> Result<(Self, u64), Error> {
+                        let enum_val = u32::read_xdr(buffer)?.0;
+                        match enum_val {
+                            #(#matches)*
+                            _ => Err(Error::InvalidEnumValue)
+                        }
+                    }
+                }
             }
         }
         _ => panic!("XDRIn macro only works with enums and structs."),

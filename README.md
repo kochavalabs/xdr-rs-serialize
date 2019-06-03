@@ -4,7 +4,7 @@
 
 - Integer [ser, des]
 - Unsigned Integer [ser, des]
-- Enumeration [ser]
+- Enumeration [ser, des]
 - Boolean [ser, des]
 - Hyper Integer [ser, des]
 - Hyper Unsigned Integer [ser, des]

@@ -299,4 +299,31 @@ mod tests {
             String::read_xdr(&mut &to_des[..]).unwrap()
         );
     }
+
+    #[derive(XDRIn, Debug, PartialEq)]
+    enum TestEnum {
+        Zero = 0,
+        One = 1,
+        Two = 2,
+    }
+
+    #[test]
+    fn test_enum() {
+        let to_des1: Vec<u8> = vec![0, 0, 0, 0];
+        let to_des2: Vec<u8> = vec![0, 0, 0, 1];
+        let to_des3: Vec<u8> = vec![0, 0, 0, 2];
+
+        assert_eq!(
+            (TestEnum::Zero, 4),
+            TestEnum::read_xdr(&mut &to_des1[..]).unwrap()
+        );
+        assert_eq!(
+            (TestEnum::One, 4),
+            TestEnum::read_xdr(&mut &to_des2[..]).unwrap()
+        );
+        assert_eq!(
+            (TestEnum::Two, 4),
+            TestEnum::read_xdr(&mut &to_des3[..]).unwrap()
+        );
+    }
 }
