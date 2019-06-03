@@ -7,6 +7,7 @@ use quote::quote;
 use syn;
 use syn::Meta::{List, NameValue};
 use syn::NestedMeta::Meta;
+use quote::ToTokens;
 
 #[proc_macro_derive(XDROut, attributes(array))]
 pub fn xdr_out_macro_derive(input: TokenStream) -> TokenStream {
@@ -15,9 +16,17 @@ pub fn xdr_out_macro_derive(input: TokenStream) -> TokenStream {
     impl_xdr_out_macro(&ast)
 }
 
+#[proc_macro_derive(XDRIn, attributes(array))]
+pub fn xdr_in_macro_derive(input: TokenStream) -> TokenStream {
+    let ast = syn::parse(input).unwrap();
+
+    impl_xdr_in_macro(&ast)
+}
+
 #[derive(Debug)]
 struct Member {
     pub name: proc_macro2::Ident,
+    pub v_type: proc_macro2::TokenStream,
     pub fixed: u32,
     pub var: u32,
 }
@@ -84,9 +93,12 @@ fn get_calls_enum(data: &syn::DataEnum) -> Result<Vec<proc_macro2::TokenStream>,
             }
             (name, false, i) => {
                 result.push(
-                    format!("{}(ref val) => {{{}.write_xdr(out)?; val.write_xdr(out)}},", name, i)
-                        .parse()
-                        .unwrap(),
+                    format!(
+                        "{}(ref val) => {{{}.write_xdr(out)?; val.write_xdr(out)}},",
+                        name, i
+                    )
+                    .parse()
+                    .unwrap(),
                 );
             }
         }
@@ -124,6 +136,7 @@ fn get_members(data: &syn::DataStruct) -> Result<Vec<Member>, ()> {
                     name: field.ident.clone().unwrap(),
                     fixed: fixed,
                     var: var,
+                    v_type: field.ty.clone().into_token_stream(),
                 });
             }
             Ok(members)
@@ -132,7 +145,7 @@ fn get_members(data: &syn::DataStruct) -> Result<Vec<Member>, ()> {
     }
 }
 
-fn get_calls_struct(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+fn get_calls_struct_out(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
     let members = get_members(data)?;
     Ok(members
         .iter()
@@ -154,11 +167,36 @@ fn get_calls_struct(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStre
         .collect())
 }
 
+fn get_calls_struct_in(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+    let members = get_members(data)?;
+    Ok(members
+        .iter()
+        .map(|i| match (&i.name, i.fixed, i.var, &i.v_type) {
+            (name, 0, 0, v_type) => format!("let {}_result = {}::read_xdr(buffer)?; read += {}_result.1;", name, v_type, name)
+                .parse()
+                .unwrap(),
+            _ => "".to_string().parse().unwrap(),
+        })
+        .collect())
+}
+fn get_struct_build_in(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+    let members = get_members(data)?;
+    Ok(members
+        .iter()
+        .map(|i| match (&i.name, i.fixed, i.var) {
+            (name, 0, 0) => format!("{}: {}_result.0,", name, name)
+                .parse()
+                .unwrap(),
+            _ => "".to_string().parse().unwrap(),
+        })
+        .collect())
+}
+
 fn impl_xdr_out_macro(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
     let gen = match &ast.data {
         syn::Data::Struct(data) => {
-            let calls = get_calls_struct(data).unwrap();
+            let calls = get_calls_struct_out(data).unwrap();
             quote! {
                 impl<Out: Write> XDROut<Out> for #name {
                     fn write_xdr(&self, out: &mut Out) -> Result<u64, Error> {
@@ -183,7 +221,35 @@ fn impl_xdr_out_macro(ast: &syn::DeriveInput) -> TokenStream {
                 }
             }
         }
-        _ => panic!("Contract macro only works with trait declarations!"),
+        _ => panic!("XDROut macro only works with enums and structs."),
     };
+    gen.into()
+}
+
+fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
+    let gen = match &ast.data {
+        syn::Data::Struct(data) => {
+            let name = &ast.ident;
+            let calls = get_calls_struct_in(data).unwrap();
+            let struct_build = get_struct_build_in(data).unwrap();
+            quote! {
+                impl<In: Read> XDRIn<In> for #name {
+                    fn read_xdr(buffer: &mut In) -> Result<(Self, u64), Error> {
+                        let mut read: u64 = 0;
+                        #(#calls)*
+                        Ok((
+                            #name {
+                              #(#struct_build)*
+                            },
+                            read
+                        ))
+                    }
+                }
+
+            }
+        }
+        _ => panic!("XDRIn macro only works with enums and structs."),
+    };
+
     gen.into()
 }

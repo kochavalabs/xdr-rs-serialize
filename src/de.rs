@@ -254,4 +254,25 @@ mod tests {
         let result: Result<(Vec<u32>, u64), Error> = Vec::read_xdr(&mut &to_des[..]);
         assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
     }
+
+    #[derive(XDRIn, PartialEq, Debug)]
+    struct TestStruct {
+        one: f32,
+        two: u32,
+    }
+
+    #[test]
+    fn test_struct() {
+        let to_des: Vec<u8> = vec![0x3f, 0x80, 0, 0, 0, 0, 0, 2];
+        let expected = TestStruct { one: 1.0, two: 2 };
+        let result: (TestStruct, u64) = TestStruct::read_xdr(&mut &to_des[..]).unwrap();
+        assert_eq!((expected, 8), result);
+    }
+
+    #[test]
+    fn test_struct_error() {
+        let to_des: Vec<u8> = vec![0x3f, 0x80, 0, 0, 0, 0, 0];
+        let result: Result<(TestStruct, u64), Error> = TestStruct::read_xdr(&mut &to_des[..]);
+        assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
+    }
 }

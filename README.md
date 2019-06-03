@@ -16,7 +16,7 @@
 - String [ser]
 - Fixed-Length Array [ser]
 - Variable-Length Array [ser, des]
-- Structure [ser]
+- Structure [ser, des]
 - Discriminated Union [ser]
 - Void [ser]
 - Optional-Data [ser]
