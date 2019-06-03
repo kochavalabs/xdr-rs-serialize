@@ -1,6 +1,8 @@
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {
     UnknownError,
+
+    ByteBadFormat,
     BoolBadFormat,
     IntegerBadFormat,
     UnsignedIntegerBadFormat,
