@@ -326,4 +326,25 @@ mod tests {
             TestEnum::read_xdr(&mut &to_des3[..]).unwrap()
         );
     }
+
+    #[test]
+    fn test_enum_error() {
+        let to_des1: Vec<u8> = vec![1, 0, 0, 0];
+        let to_des2: Vec<u8> = vec![0, 1, 0, 1];
+        let to_des3: Vec<u8> = vec![0, 0, 0, 3];
+
+        assert_eq!(
+            Err(Error::InvalidEnumValue),
+            TestEnum::read_xdr(&mut &to_des1[..])
+        );
+        assert_eq!(
+            Err(Error::InvalidEnumValue),
+            TestEnum::read_xdr(&mut &to_des2[..])
+        );
+        assert_eq!(
+            Err(Error::InvalidEnumValue),
+            TestEnum::read_xdr(&mut &to_des3[..])
+        );
+    }
+
 }
