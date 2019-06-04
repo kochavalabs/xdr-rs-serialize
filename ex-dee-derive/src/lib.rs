@@ -207,6 +207,12 @@ fn get_calls_struct_in(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenS
             )
             .parse()
             .unwrap(),
+            (name, 0, var, v_type) => format!(
+                "let {}_result: ({}, u64) = read_var_array({}, buffer)?; read += {}_result.1;",
+                name, v_type, var, name
+            )
+            .parse()
+            .unwrap(),
             _ => "".to_string().parse().unwrap(),
         })
         .collect())

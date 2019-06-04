@@ -156,6 +156,18 @@ pub fn read_fixed_array<In: Read, T: XDRIn<In>>(
     Ok((result, read + pad.1))
 }
 
+pub fn read_var_array<In: Read, T: XDRIn<In>>(
+    size: u32,
+    buffer: &mut In,
+) -> Result<(Vec<T>, u64), Error> {
+    let length = u32::read_xdr(buffer)?.0;
+    if length > size {
+        return Err(Error::BadArraySize);
+    }
+    let result = read_fixed_array(length, buffer)?;
+    Ok((result.0, result.1 + 4))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -440,6 +452,27 @@ mod tests {
     #[test]
     fn test_void() {
         let to_des: Vec<u8> = vec![];
-        assert_eq!(((),0), <()>::read_xdr(&mut &to_des[..]).unwrap());
+        assert_eq!(((), 0), <()>::read_xdr(&mut &to_des[..]).unwrap());
+    }
+
+    #[derive(XDRIn, Debug, PartialEq)]
+    struct TestVarArray {
+        #[array(var = 3)]
+        pub data: Vec<u32>,
+    }
+
+    #[test]
+    fn test_var_array_limit() {
+        let to_des: Vec<u8> = vec![0, 0, 0, 2, 0, 0, 0, 4, 0, 0, 0, 6];
+        let result = TestVarArray::read_xdr(&mut &to_des[..]).unwrap();
+        let expected = TestVarArray { data: vec![4, 6] };
+        assert_eq!((expected, 12), result);
+    }
+
+    #[test]
+    fn test_var_too_long() {
+        let to_des: Vec<u8> = vec![0, 0, 0, 4];
+        let result = TestVarArray::read_xdr(&mut &to_des[..]);
+        assert_eq!(Err(Error::BadArraySize), result);
     }
 }
