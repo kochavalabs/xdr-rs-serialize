@@ -144,10 +144,18 @@ pub fn write_var_array<Out: Write, T: XDROut<Out>>(
     size: u32,
     out: &mut Out,
 ) -> Result<u64, Error> {
-    if val.len() as u32 >= size {
+    if val.len() as u32 > size {
         return Err(Error::VarArrayWrongSize);
     }
     val.write_xdr(out)
+}
+
+pub fn write_var_string<Out: Write>(
+    val: String,
+    size: u32,
+    out: &mut Out,
+) -> Result<u64, Error> {
+    write_var_array(&val.as_bytes().to_vec(), size, out)
 }
 
 #[cfg(test)]
@@ -293,6 +301,33 @@ mod tests {
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_xdr(&mut actual).unwrap();
         assert_eq!(expected, actual);
+    }
+
+    #[derive(Default, XDROut)]
+    struct TestStringLength {
+        #[array(var = 5)]
+        pub string: String,
+    }
+
+    #[test]
+    fn test_string_length() {
+        let to_ser = TestStringLength {
+            string: "hello".to_string(),
+        };
+        let expected: Vec<u8> = vec![0, 0, 0, 5, 104, 101, 108, 108, 111, 0, 0, 0];
+        let mut actual: Vec<u8> = Vec::new();
+        to_ser.write_xdr(&mut actual).unwrap();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_string_length_error() {
+        let to_ser = TestStringLength {
+            string: "hellothere".to_string(),
+        };
+        let mut actual: Vec<u8> = Vec::new();
+        let result = to_ser.write_xdr(&mut actual);
+        assert_eq!(Err(Error::VarArrayWrongSize), result);
     }
 
     #[derive(XDROut)]

@@ -168,6 +168,22 @@ pub fn read_var_array<In: Read, T: XDRIn<In>>(
     Ok((result.0, result.1 + 4))
 }
 
+pub fn read_var_string<In: Read>(max_size: u32, buffer: &mut In) -> Result<(String, u64), Error> {
+    let size = u32::read_xdr(buffer)?.0;
+    if size > max_size {
+        return Err(Error::VarArrayWrongSize);
+    }
+    let mut read: u64 = 4;
+    let mut to_read: Vec<u8> = vec![0; size as usize];
+    let result = match buffer.read_exact(&mut to_read) {
+        Ok(_) => Ok(String::from_utf8(to_read)),
+        _ => return Err(Error::StringBadFormat),
+    }?;
+    read += size as u64;
+    let pad = consume_padding(read, buffer)?;
+    Ok((result.unwrap(), read + pad.1))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -330,6 +346,33 @@ mod tests {
         assert_eq!(
             ("hello".to_string(), 12),
             String::read_xdr(&mut &to_des[..]).unwrap()
+        );
+    }
+
+    #[derive(XDRIn, Debug, PartialEq)]
+    struct TestStringLength {
+        #[array(var = 5)]
+        pub string: String,
+    }
+
+    #[test]
+    fn test_string_length() {
+        let to_des: Vec<u8> = vec![0, 0, 0, 5, 104, 101, 108, 108, 111, 0, 0, 0];
+        let expected = TestStringLength {
+            string: "hello".to_string(),
+        };
+        assert_eq!(
+            (expected, 12),
+            TestStringLength::read_xdr(&mut &to_des[..]).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_string_length_error() {
+        let to_des: Vec<u8> = vec![0, 0, 0, 7, 104, 101, 108, 108, 111, 0, 0, 0];
+        assert_eq!(
+            Err(Error::VarArrayWrongSize),
+            TestStringLength::read_xdr(&mut &to_des[..])
         );
     }
 

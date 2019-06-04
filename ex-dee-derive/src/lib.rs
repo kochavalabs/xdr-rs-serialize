@@ -201,21 +201,31 @@ fn get_calls_struct_out(data: &syn::DataStruct) -> Result<Vec<proc_macro2::Token
     let members = get_members(data)?;
     Ok(members
         .iter()
-        .map(|i| match (&i.name, i.fixed, i.var) {
-            (name, 0, 0) => format!("written += self.{}.write_xdr(out)?;", name)
+        .map(
+            |i| match (&i.name, i.fixed, i.var, i.v_type.to_string() == "String") {
+                (name, 0, 0, _) => format!("written += self.{}.write_xdr(out)?;", name)
+                    .parse()
+                    .unwrap(),
+                (name, fixed, 0, _) => format!(
+                    "written += write_fixed_array(&self.{}, {}, out)?;",
+                    name, fixed
+                )
                 .parse()
                 .unwrap(),
-            (name, fixed, 0) => format!(
-                "written += write_fixed_array(&self.{}, {}, out)?;",
-                name, fixed
-            )
-            .parse()
-            .unwrap(),
-            (name, 0, var) => format!("written += write_var_array(&self.{}, {}, out)?;", name, var)
+                (name, 0, var, true) => format!(
+                    "written += write_var_string(self.{}.clone(), {}, out)?;",
+                    name, var
+                )
                 .parse()
                 .unwrap(),
-            _ => "".to_string().parse().unwrap(),
-        })
+                (name, 0, var, false) => {
+                    format!("written += write_var_array(&self.{}, {}, out)?;", name, var)
+                        .parse()
+                        .unwrap()
+                }
+                _ => "".to_string().parse().unwrap(),
+            },
+        )
         .collect())
 }
 
@@ -235,6 +245,12 @@ fn get_calls_struct_in(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenS
             (name, fixed, 0, v_type) => format!(
                 "let {}_result: ({}, u64) = read_fixed_array({}, buffer)?; read += {}_result.1;",
                 name, v_type, fixed, name
+            )
+            .parse()
+            .unwrap(),
+            (name, 0, var, v_type) if v_type.to_string() == "String" => format!(
+                "let {}_result: ({}, u64) = read_var_string({}, buffer)?; read += {}_result.1;",
+                name, v_type, var, name
             )
             .parse()
             .unwrap(),
