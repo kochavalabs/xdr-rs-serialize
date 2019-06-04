@@ -475,4 +475,38 @@ mod tests {
         let result = TestVarArray::read_xdr(&mut &to_des[..]);
         assert_eq!(Err(Error::BadArraySize), result);
     }
+
+    #[derive(XDRIn, Debug, PartialEq)]
+    enum TestUnion {
+        First(u32),
+        Second(TestStruct),
+    }
+
+    #[test]
+    fn test_union() {
+        let to_des_first: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 3];
+        let expected_first = TestUnion::First(3);
+        let actual_first = TestUnion::read_xdr(&mut &to_des_first[..]).unwrap();
+        assert_eq!((expected_first, 8), actual_first);
+
+        let to_des_second: Vec<u8> = vec![0, 0, 0, 1, 0x3f, 0x80, 0, 0, 0, 0, 0, 2];
+        let expected_second = TestUnion::Second(TestStruct { one: 1.0, two: 2 });
+        let actual_second = TestUnion::read_xdr(&mut &to_des_second[..]).unwrap();
+        assert_eq!((expected_second, 12), actual_second);
+    }
+
+    #[test]
+    fn test_union_error() {
+        let to_des_1: Vec<u8> = vec![0, 0, 0, 3, 0x3f, 0x80, 0, 0, 0, 0, 0, 2];
+        assert_eq!(
+            Err(Error::InvalidEnumValue),
+            TestUnion::read_xdr(&mut &to_des_1[..])
+        );
+
+        let to_des_2: Vec<u8> = vec![0, 0, 0, 0, 0x3f, 0x80];
+        assert_eq!(
+            Err(Error::UnsignedIntegerBadFormat),
+            TestUnion::read_xdr(&mut &to_des_2[..])
+        );
+    }
 }

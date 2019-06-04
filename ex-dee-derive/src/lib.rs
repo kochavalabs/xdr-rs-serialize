@@ -34,6 +34,7 @@ struct Member {
 #[derive(Debug)]
 struct Enum {
     pub name: proc_macro2::Ident,
+    pub e_type: Option<proc_macro2::Ident>,
     pub unit: bool,
     pub index: u32,
 }
@@ -60,16 +61,31 @@ fn get_enums(data: &syn::DataEnum) -> Result<Vec<Enum>, ()> {
                         unit: true,
                         index: i_val.value() as u32,
                         name: variant.ident.clone(),
+                        e_type: None,
                     }),
                     _ => {}
                 },
                 _ => {}
             },
-            (syn::Fields::Unnamed(_), _) => {
+            (syn::Fields::Unnamed(un), None) => {
+                let types: Vec<_> = un
+                    .unnamed
+                    .iter()
+                    .filter_map(|f| match f.ty.clone() {
+                        syn::Type::Path(t_path) => Some(t_path.path.segments),
+                        _ => None,
+                    })
+                    .flatten()
+                    .map(|s| s.ident)
+                    .collect();
+                if types.len() != 1 {
+                    panic!("Cannot have a union with more than one type.");
+                }
                 members.push(Enum {
                     unit: false,
                     index: index,
                     name: variant.ident.clone(),
+                    e_type: Some(types[0].clone()),
                 });
                 index += 1;
             }
@@ -86,15 +102,30 @@ fn get_calls_enum_in(
     let enums = get_enums(data)?;
     let mut result = Vec::new();
     for enu in enums.iter() {
-        match (&enu.name, enu.unit, enu.index) {
-            (name, true, i) => {
+        match (&enu.name, enu.unit, enu.index, &enu.e_type) {
+            (name, true, i, None) => {
                 result.push(
                     format!("{} => Ok(({}::{}, 4)),", i, enum_name, name)
                         .parse()
                         .unwrap(),
                 );
             }
-            (_name, false, _i) => {}
+            (name, false, i, Some(typ)) => {
+                result.push(
+                    format!(
+                        "{} => {{let result = {}::read_xdr(buffer)?; Ok(({}::{}(result.0), result.1 + 4))}},",
+                        i,
+                        typ.to_string().replace("<", "::<"),
+                        enum_name,
+                        name
+                    )
+                    .parse()
+                    .unwrap(),
+                );
+            }
+            _ => {
+                return Err(());
+            }
         }
     }
     Ok(result)

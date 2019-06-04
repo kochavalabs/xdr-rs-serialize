@@ -17,6 +17,6 @@
 - Fixed-Length Array [ser, des]
 - Variable-Length Array [ser, des]
 - Structure [ser, des]
-- Discriminated Union [ser]
+- Discriminated Union [ser, des]
 - Void [ser, des]
 - Optional-Data [ser, des]
