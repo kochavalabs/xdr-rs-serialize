@@ -523,6 +523,7 @@ mod tests {
     enum TestUnion {
         First(u32),
         Second(TestStruct),
+        Third(()),
     }
 
     #[test]

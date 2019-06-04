@@ -78,14 +78,16 @@ fn get_enums(data: &syn::DataEnum) -> Result<Vec<Enum>, ()> {
                     .flatten()
                     .map(|s| s.ident)
                     .collect();
-                if types.len() != 1 {
-                    panic!("Cannot have a union with more than one type.");
-                }
+                let ident = match types.len() {
+                    0 => None,
+                    1 => Some(types[0].clone()),
+                    _ => panic!("Cannot have a union with more than one type.")
+                };
                 members.push(Enum {
                     unit: false,
                     index: index,
                     name: variant.ident.clone(),
-                    e_type: Some(types[0].clone()),
+                    e_type: ident,
                 });
                 index += 1;
             }
@@ -116,6 +118,18 @@ fn get_calls_enum_in(
                         "{} => {{let result = {}::read_xdr(buffer)?; Ok(({}::{}(result.0), result.1 + 4))}},",
                         i,
                         typ.to_string().replace("<", "::<"),
+                        enum_name,
+                        name
+                    )
+                    .parse()
+                    .unwrap(),
+                );
+            },
+            (name, false, i, None) => {
+                result.push(
+                    format!(
+                        "{} => {{let result = <()>::read_xdr(buffer)?; Ok(({}::{}(result.0), result.1 + 4))}},",
+                        i,
                         enum_name,
                         name
                     )
