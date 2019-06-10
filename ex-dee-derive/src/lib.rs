@@ -36,7 +36,7 @@ struct Enum {
     pub name: proc_macro2::Ident,
     pub e_type: Option<proc_macro2::Ident>,
     pub unit: bool,
-    pub index: u32,
+    pub index: i32,
 }
 
 fn get_meta_items(attr: &syn::Attribute) -> Option<Vec<syn::NestedMeta>> {
@@ -52,14 +52,14 @@ fn get_meta_items(attr: &syn::Attribute) -> Option<Vec<syn::NestedMeta>> {
 
 fn get_enums(data: &syn::DataEnum) -> Result<Vec<Enum>, ()> {
     let mut members = Vec::new();
-    let mut index: u32 = 0;
+    let mut index: i32 = 0;
     for variant in &data.variants {
         match (&variant.fields, &variant.discriminant) {
             (syn::Fields::Unit, Some(expr)) => match expr.1 {
                 syn::Expr::Lit(ref e_lit) => match e_lit.lit {
                     syn::Lit::Int(ref i_val) => members.push(Enum {
                         unit: true,
-                        index: i_val.value() as u32,
+                        index: i_val.value() as i32,
                         name: variant.ident.clone(),
                         e_type: None,
                     }),
@@ -349,7 +349,7 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
             quote! {
                 impl<In: Read> XDRIn<In> for #name {
                     fn read_xdr(buffer: &mut In) -> Result<(Self, u64), Error> {
-                        let enum_val = u32::read_xdr(buffer)?.0;
+                        let enum_val = i32::read_xdr(buffer)?.0;
                         match enum_val {
                             #(#matches)*
                             _ => Err(Error::InvalidEnumValue)
