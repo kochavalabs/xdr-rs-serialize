@@ -294,7 +294,7 @@ fn impl_xdr_out_macro(ast: &syn::DeriveInput) -> TokenStream {
         syn::Data::Struct(data) => {
             let calls = get_calls_struct_out(data).unwrap();
             quote! {
-                impl<Out: Write> XDROut<Out> for #name {
+                impl<Out: std::io::Write> XDROut<Out> for #name {
                     fn write_xdr(&self, out: &mut Out) -> Result<u64, Error> {
                         let mut written: u64 = 0;
                         #(#calls)*
@@ -307,7 +307,7 @@ fn impl_xdr_out_macro(ast: &syn::DeriveInput) -> TokenStream {
             let matches = get_calls_enum_out(data).unwrap();
             let names = std::iter::repeat(name);
             quote! {
-                impl<Out: Write> XDROut<Out> for #name {
+                impl<Out: std::io::Write> XDROut<Out> for #name {
                     fn write_xdr(&self, out: &mut Out) -> Result<u64, Error> {
                         match *self {
                             #(#names::#matches)*
@@ -329,7 +329,7 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
             let calls = get_calls_struct_in(data).unwrap();
             let struct_build = get_struct_build_in(data).unwrap();
             quote! {
-                impl<In: Read> XDRIn<In> for #name {
+                impl<In: std::io::Read> XDRIn<In> for #name {
                     fn read_xdr(buffer: &mut In) -> Result<(Self, u64), Error> {
                         let mut read: u64 = 0;
                         #(#calls)*
@@ -347,7 +347,7 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
         syn::Data::Enum(data) => {
             let matches = get_calls_enum_in(data, name).unwrap();
             quote! {
-                impl<In: Read> XDRIn<In> for #name {
+                impl<In: std::io::Read> XDRIn<In> for #name {
                     fn read_xdr(buffer: &mut In) -> Result<(Self, u64), Error> {
                         let enum_val = i32::read_xdr(buffer)?.0;
                         match enum_val {
