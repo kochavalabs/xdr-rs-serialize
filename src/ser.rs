@@ -106,10 +106,10 @@ where
 
 impl XDROut for Vec<u8> {
     fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
-        let mut written: u64 =  self.len() as u64;
+        let mut written: u64 = self.len() as u64;
         let size: u32 = self.len() as u32;
         written += size.write_xdr(out)?;
-        out.extend(self);
+        out.extend_from_slice(&self);
         written += pad(written, out)?;
         Ok(written)
     }
@@ -142,11 +142,7 @@ pub fn write_fixed_array<T: XDROut>(
     Ok(written)
 }
 
-pub fn write_fixed_opaque (
-    val: &Vec<u8>,
-    size: u32,
-    out: &mut Vec<u8>,
-) -> Result<u64, Error> {
+pub fn write_fixed_opaque(val: &Vec<u8>, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
     if val.len() as u32 != size {
         return Err(Error::FixedArrayWrongSize);
     }
