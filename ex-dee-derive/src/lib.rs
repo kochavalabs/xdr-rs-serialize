@@ -115,7 +115,7 @@ fn get_calls_enum_in(
             (name, false, i, Some(typ)) => {
                 result.push(
                     format!(
-                        "{} => {{let result = {}::read_xdr(buffer)?; Ok(({}::{}(result.0), result.1 + 4))}},",
+                        "{} => {{let result = {}::read_xdr(&buffer[4..])?; Ok(({}::{}(result.0), result.1 + 4))}},",
                         i,
                         typ.to_string().replace("<", "::<"),
                         enum_name,
@@ -128,7 +128,7 @@ fn get_calls_enum_in(
             (name, false, i, None) => {
                 result.push(
                     format!(
-                        "{} => {{let result = <()>::read_xdr(buffer)?; Ok(({}::{}(result.0), result.1 + 4))}},",
+                        "{} => {{let result = <()>::read_xdr(&buffer[..])?; Ok(({}::{}(result.0), result.1 + 4))}},",
                         i,
                         enum_name,
                         name
@@ -262,7 +262,7 @@ fn get_calls_struct_in(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenS
         .iter()
         .map(|i| match (&i.name, i.fixed, i.var, &i.v_type) {
             (name, 0, 0, v_type) => format!(
-                "let {}_result = {}::read_xdr(buffer)?; read += {}_result.1;",
+                "let {}_result = {}::read_xdr(&buffer[read as usize..])?; read += {}_result.1;",
                 name,
                 v_type.to_string().replace("<", "::<"),
                 name
@@ -272,32 +272,32 @@ fn get_calls_struct_in(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenS
 
             (name, fixed, 0, v_type) if v_type.to_string().replace(" ", "") != "Vec<u8>" => {
                 format!(
-                "let {}_result: ({}, u64) = read_fixed_array({}, buffer)?; read += {}_result.1;",
+                "let {}_result: ({}, u64) = read_fixed_array({}, &buffer[read as usize..])?; read += {}_result.1;",
                 name, v_type, fixed, name
             )
                 .parse()
                 .unwrap()
             }
             (name, 0, var, v_type) if v_type.to_string() == "String" => format!(
-                "let {}_result: ({}, u64) = read_var_string({}, buffer)?; read += {}_result.1;",
+                "let {}_result: ({}, u64) = read_var_string({}, &buffer[read as usize..])?; read += {}_result.1;",
                 name, v_type, var, name
             )
             .parse()
             .unwrap(),
             (name, 0, var, v_type) if v_type.to_string().replace(" ", "") != "Vec<u8>" => format!(
-                "let {}_result: ({}, u64) = read_var_array({}, buffer)?; read += {}_result.1;",
+                "let {}_result: ({}, u64) = read_var_array({}, &buffer[read as usize..])?; read += {}_result.1;",
                 name, v_type, var, name
             )
             .parse()
             .unwrap(),
             (name, fixed, 0, v_type) => format!(
-                "let {}_result: ({}, u64) = read_fixed_opaque({}, buffer)?; read += {}_result.1;",
+                "let {}_result: ({}, u64) = read_fixed_opaque({}, &buffer[read as usize..])?; read += {}_result.1;",
                 name, v_type, fixed, name
             )
             .parse()
             .unwrap(),
             (name, 0, var, v_type) => format!(
-                "let {}_result: ({}, u64) = read_var_opaque({}, buffer)?; read += {}_result.1;",
+                "let {}_result: ({}, u64) = read_var_opaque({}, &buffer[read as usize..])?; read += {}_result.1;",
                 name, v_type, var, name
             )
             .parse()
@@ -358,7 +358,7 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
             let struct_build = get_struct_build_in(data).unwrap();
             quote! {
                 impl XDRIn for #name {
-                    fn read_xdr(buffer: &mut Vec<u8>) -> Result<(Self, u64), Error> {
+                    fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error> {
                         let mut read: u64 = 0;
                         #(#calls)*
                         Ok((
@@ -376,7 +376,7 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
             let matches = get_calls_enum_in(data, name).unwrap();
             quote! {
                 impl XDRIn for #name {
-                    fn read_xdr(buffer: &mut Vec<u8>) -> Result<(Self, u64), Error> {
+                    fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error> {
                         let enum_val = i32::read_xdr(buffer)?.0;
                         match enum_val {
                             #(#matches)*
