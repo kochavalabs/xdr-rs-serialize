@@ -152,6 +152,13 @@ pub fn write_fixed_opaque(val: &Vec<u8>, size: u32, out: &mut Vec<u8>) -> Result
     Ok(written)
 }
 
+pub fn write_var_opaque(val: &Vec<u8>, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
+    if val.len() as u32 > size {
+        return Err(Error::BadArraySize);
+    }
+    val.write_xdr(out)
+}
+
 pub fn write_var_array<T: XDROut>(
     val: &Vec<T>,
     size: u32,
@@ -264,6 +271,15 @@ mod tests {
         assert_eq!(expected, actual);
     }
 
+    #[test]
+    fn test_var_opaque_empty() {
+        let to_ser: Vec<u8> = vec![];
+        let expected: Vec<u8> = vec![0, 0, 0, 0];
+        let mut actual: Vec<u8> = Vec::new();
+        to_ser.write_xdr(&mut actual).unwrap();
+        assert_eq!(expected, actual);
+    }
+
     #[derive(Default, XDROut)]
     struct TestFixedOpaqueNoPadding {
         #[array(fixed = 8)]
@@ -285,6 +301,21 @@ mod tests {
     struct TestFixedOpaquePadding {
         #[array(fixed = 5)]
         pub opaque: Vec<u8>,
+    }
+
+    #[derive(Default, XDROut)]
+    struct TestVarOpaquePadding {
+        #[array(var = 5)]
+        pub opaque: Vec<u8>,
+    }
+
+    #[test]
+    fn test_var_opaque_sized_empty() {
+        let to_ser = TestVarOpaquePadding { opaque: vec![] };
+        let expected: Vec<u8> = vec![0, 0, 0, 0];
+        let mut actual: Vec<u8> = Vec::new();
+        to_ser.write_xdr(&mut actual).unwrap();
+        assert_eq!(expected, actual);
     }
 
     #[test]

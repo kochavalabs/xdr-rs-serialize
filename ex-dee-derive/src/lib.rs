@@ -239,6 +239,11 @@ fn get_calls_struct_out(data: &syn::DataStruct) -> Result<Vec<proc_macro2::Token
                 )
                 .parse()
                 .unwrap(),
+                (name, 0, var, false, true) => {
+                    format!("written += write_var_opaque(&self.{}, {}, out)?;", name, var)
+                        .parse()
+                        .unwrap()
+                }
                 (name, 0, var, true, false) => format!(
                     "written += write_var_string(self.{}.clone(), {}, out)?;",
                     name, var
