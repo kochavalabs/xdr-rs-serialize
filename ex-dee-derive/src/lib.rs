@@ -81,7 +81,7 @@ fn get_enums(data: &syn::DataEnum) -> Result<Vec<Enum>, ()> {
                 let ident = match types.len() {
                     0 => None,
                     1 => Some(types[0].clone()),
-                    _ => panic!("Cannot have a union with more than one type.")
+                    _ => panic!("Cannot have a union with more than one type."),
                 };
                 members.push(Enum {
                     unit: false,
@@ -115,7 +115,7 @@ fn get_calls_enum_in(
             (name, false, i, Some(typ)) => {
                 result.push(
                     format!(
-                        "{} => {{let result = {}::read_xdr(buffer)?; Ok(({}::{}(result.0), result.1 + 4))}},",
+                        "{} => {{let result = {}::read_xdr(&buffer[4..])?; Ok(({}::{}(result.0), result.1 + 4))}},",
                         i,
                         typ.to_string().replace("<", "::<"),
                         enum_name,
@@ -124,11 +124,11 @@ fn get_calls_enum_in(
                     .parse()
                     .unwrap(),
                 );
-            },
+            }
             (name, false, i, None) => {
                 result.push(
                     format!(
-                        "{} => {{let result = <()>::read_xdr(buffer)?; Ok(({}::{}(result.0), result.1 + 4))}},",
+                        "{} => {{let result = <()>::read_xdr(&buffer[..])?; Ok(({}::{}(result.0), result.1 + 4))}},",
                         i,
                         enum_name,
                         name
@@ -198,6 +198,7 @@ fn get_members(data: &syn::DataStruct) -> Result<Vec<Member>, ()> {
                         };
                     }
                 }
+
                 members.push(Member {
                     name: field.ident.clone().unwrap(),
                     fixed: fixed,
@@ -215,31 +216,48 @@ fn get_calls_struct_out(data: &syn::DataStruct) -> Result<Vec<proc_macro2::Token
     let members = get_members(data)?;
     Ok(members
         .iter()
-        .map(
-            |i| match (&i.name, i.fixed, i.var, i.v_type.to_string() == "String") {
-                (name, 0, 0, _) => format!("written += self.{}.write_xdr(out)?;", name)
+        .map(|i| {
+            match (
+                &i.name,
+                i.fixed,
+                i.var,
+                i.v_type.to_string() == "String",
+                i.v_type.to_string().replace(" ", "") == "Vec<u8>",
+            ) {
+                (name, 0, 0, false, false) => format!("written += self.{}.write_xdr(out)?;", name)
                     .parse()
                     .unwrap(),
-                (name, fixed, 0, _) => format!(
+                (name, fixed, 0, false, false) => format!(
                     "written += write_fixed_array(&self.{}, {}, out)?;",
                     name, fixed
                 )
                 .parse()
                 .unwrap(),
-                (name, 0, var, true) => format!(
+                (name, fixed, 0, false, true) => format!(
+                    "written += write_fixed_opaque(&self.{}, {}, out)?;",
+                    name, fixed
+                )
+                .parse()
+                .unwrap(),
+                (name, 0, var, false, true) => {
+                    format!("written += write_var_opaque(&self.{}, {}, out)?;", name, var)
+                        .parse()
+                        .unwrap()
+                }
+                (name, 0, var, true, false) => format!(
                     "written += write_var_string(self.{}.clone(), {}, out)?;",
                     name, var
                 )
                 .parse()
                 .unwrap(),
-                (name, 0, var, false) => {
+                (name, 0, var, false, false) => {
                     format!("written += write_var_array(&self.{}, {}, out)?;", name, var)
                         .parse()
                         .unwrap()
                 }
                 _ => "".to_string().parse().unwrap(),
-            },
-        )
+            }
+        })
         .collect())
 }
 
@@ -249,27 +267,42 @@ fn get_calls_struct_in(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenS
         .iter()
         .map(|i| match (&i.name, i.fixed, i.var, &i.v_type) {
             (name, 0, 0, v_type) => format!(
-                "let {}_result = {}::read_xdr(buffer)?; read += {}_result.1;",
+                "let {}_result = {}::read_xdr(&buffer[read as usize..])?; read += {}_result.1;",
                 name,
                 v_type.to_string().replace("<", "::<"),
                 name
             )
             .parse()
             .unwrap(),
-            (name, fixed, 0, v_type) => format!(
-                "let {}_result: ({}, u64) = read_fixed_array({}, buffer)?; read += {}_result.1;",
+
+            (name, fixed, 0, v_type) if v_type.to_string().replace(" ", "") != "Vec<u8>" => {
+                format!(
+                "let {}_result: ({}, u64) = read_fixed_array({}, &buffer[read as usize..])?; read += {}_result.1;",
                 name, v_type, fixed, name
             )
-            .parse()
-            .unwrap(),
+                .parse()
+                .unwrap()
+            }
             (name, 0, var, v_type) if v_type.to_string() == "String" => format!(
-                "let {}_result: ({}, u64) = read_var_string({}, buffer)?; read += {}_result.1;",
+                "let {}_result: ({}, u64) = read_var_string({}, &buffer[read as usize..])?; read += {}_result.1;",
                 name, v_type, var, name
             )
             .parse()
             .unwrap(),
+            (name, 0, var, v_type) if v_type.to_string().replace(" ", "") != "Vec<u8>" => format!(
+                "let {}_result: ({}, u64) = read_var_array({}, &buffer[read as usize..])?; read += {}_result.1;",
+                name, v_type, var, name
+            )
+            .parse()
+            .unwrap(),
+            (name, fixed, 0, v_type) => format!(
+                "let {}_result: ({}, u64) = read_fixed_opaque({}, &buffer[read as usize..])?; read += {}_result.1;",
+                name, v_type, fixed, name
+            )
+            .parse()
+            .unwrap(),
             (name, 0, var, v_type) => format!(
-                "let {}_result: ({}, u64) = read_var_array({}, buffer)?; read += {}_result.1;",
+                "let {}_result: ({}, u64) = read_var_opaque({}, &buffer[read as usize..])?; read += {}_result.1;",
                 name, v_type, var, name
             )
             .parse()
@@ -294,8 +327,8 @@ fn impl_xdr_out_macro(ast: &syn::DeriveInput) -> TokenStream {
         syn::Data::Struct(data) => {
             let calls = get_calls_struct_out(data).unwrap();
             quote! {
-                impl<Out: std::io::Write> XDROut<Out> for #name {
-                    fn write_xdr(&self, out: &mut Out) -> Result<u64, Error> {
+                impl XDROut for #name {
+                    fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
                         let mut written: u64 = 0;
                         #(#calls)*
                         Ok(written)
@@ -307,8 +340,8 @@ fn impl_xdr_out_macro(ast: &syn::DeriveInput) -> TokenStream {
             let matches = get_calls_enum_out(data).unwrap();
             let names = std::iter::repeat(name);
             quote! {
-                impl<Out: std::io::Write> XDROut<Out> for #name {
-                    fn write_xdr(&self, out: &mut Out) -> Result<u64, Error> {
+                impl XDROut for #name {
+                    fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
                         match *self {
                             #(#names::#matches)*
                             _ => Err(Error::InvalidEnumValue)
@@ -329,8 +362,8 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
             let calls = get_calls_struct_in(data).unwrap();
             let struct_build = get_struct_build_in(data).unwrap();
             quote! {
-                impl<In: std::io::Read> XDRIn<In> for #name {
-                    fn read_xdr(buffer: &mut In) -> Result<(Self, u64), Error> {
+                impl XDRIn for #name {
+                    fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error> {
                         let mut read: u64 = 0;
                         #(#calls)*
                         Ok((
@@ -347,8 +380,8 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
         syn::Data::Enum(data) => {
             let matches = get_calls_enum_in(data, name).unwrap();
             quote! {
-                impl<In: std::io::Read> XDRIn<In> for #name {
-                    fn read_xdr(buffer: &mut In) -> Result<(Self, u64), Error> {
+                impl XDRIn for #name {
+                    fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error> {
                         let enum_val = i32::read_xdr(buffer)?.0;
                         match enum_val {
                             #(#matches)*

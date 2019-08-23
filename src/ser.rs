@@ -2,11 +2,11 @@ pub use std::io::Write;
 
 use crate::error::Error;
 
-pub trait XDROut<Out: Write> {
-    fn write_xdr(&self, out: &mut Out) -> Result<u64, Error>;
+pub trait XDROut {
+    fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error>;
 }
 
-fn pad<Out: Write>(written: u64, out: &mut Out) -> Result<u64, Error> {
+fn pad(written: u64, out: &mut Vec<u8>) -> Result<u64, Error> {
     match (4 - written % 4) % 4 {
         0 => Ok(0),
         1 => match out.write(&[0]) {
@@ -25,8 +25,8 @@ fn pad<Out: Write>(written: u64, out: &mut Out) -> Result<u64, Error> {
     }
 }
 
-impl<Out: Write> XDROut<Out> for bool {
-    fn write_xdr(&self, out: &mut Out) -> Result<u64, Error> {
+impl XDROut for bool {
+    fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         let to_write: u32 = if *self { 1 } else { 0 };
         match out.write(&to_write.to_be_bytes()) {
             Ok(4) => Ok(4),
@@ -35,8 +35,8 @@ impl<Out: Write> XDROut<Out> for bool {
     }
 }
 
-impl<Out: Write> XDROut<Out> for i32 {
-    fn write_xdr(&self, out: &mut Out) -> Result<u64, Error> {
+impl XDROut for i32 {
+    fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         match out.write(&self.to_be_bytes()) {
             Ok(4) => Ok(4),
             _ => Err(Error::IntegerBadFormat),
@@ -44,8 +44,8 @@ impl<Out: Write> XDROut<Out> for i32 {
     }
 }
 
-impl<Out: Write> XDROut<Out> for u32 {
-    fn write_xdr(&self, out: &mut Out) -> Result<u64, Error> {
+impl XDROut for u32 {
+    fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         match out.write(&self.to_be_bytes()) {
             Ok(4) => Ok(4),
             _ => Err(Error::UnsignedIntegerBadFormat),
@@ -53,17 +53,8 @@ impl<Out: Write> XDROut<Out> for u32 {
     }
 }
 
-impl<Out: Write> XDROut<Out> for u8 {
-    fn write_xdr(&self, out: &mut Out) -> Result<u64, Error> {
-        match out.write(&self.to_be_bytes()) {
-            Ok(1) => Ok(1),
-            _ => Err(Error::UnsignedIntegerBadFormat),
-        }
-    }
-}
-
-impl<Out: Write> XDROut<Out> for i64 {
-    fn write_xdr(&self, out: &mut Out) -> Result<u64, Error> {
+impl XDROut for i64 {
+    fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         match out.write(&self.to_be_bytes()) {
             Ok(8) => Ok(8),
             _ => Err(Error::HyperBadFormat),
@@ -71,8 +62,8 @@ impl<Out: Write> XDROut<Out> for i64 {
     }
 }
 
-impl<Out: Write> XDROut<Out> for u64 {
-    fn write_xdr(&self, out: &mut Out) -> Result<u64, Error> {
+impl XDROut for u64 {
+    fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         match out.write(&self.to_be_bytes()) {
             Ok(8) => Ok(8),
             _ => Err(Error::UnsignedHyperBadFormat),
@@ -80,8 +71,8 @@ impl<Out: Write> XDROut<Out> for u64 {
     }
 }
 
-impl<Out: Write> XDROut<Out> for f32 {
-    fn write_xdr(&self, out: &mut Out) -> Result<u64, Error> {
+impl XDROut for f32 {
+    fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         match out.write(&self.to_bits().to_be_bytes()) {
             Ok(4) => Ok(4),
             _ => Err(Error::FloatBadFormat),
@@ -89,8 +80,8 @@ impl<Out: Write> XDROut<Out> for f32 {
     }
 }
 
-impl<Out: Write> XDROut<Out> for f64 {
-    fn write_xdr(&self, out: &mut Out) -> Result<u64, Error> {
+impl XDROut for f64 {
+    fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         match out.write(&self.to_bits().to_be_bytes()) {
             Ok(8) => Ok(8),
             _ => Err(Error::DoubleBadFormat),
@@ -98,35 +89,48 @@ impl<Out: Write> XDROut<Out> for f64 {
     }
 }
 
-impl<Out: Write, T: XDROut<Out> + Sized> XDROut<Out> for Vec<T> {
-    fn write_xdr(&self, out: &mut Out) -> Result<u64, Error> {
+impl<T> XDROut for Vec<T>
+where
+    T: XDROut,
+{
+    fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         let mut written: u64 = 0;
         let size: u32 = self.len() as u32;
         written += size.write_xdr(out)?;
         for item in self {
             written += item.write_xdr(out)?;
         }
+        Ok(written)
+    }
+}
+
+impl XDROut for Vec<u8> {
+    fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
+        let mut written: u64 = self.len() as u64;
+        let size: u32 = self.len() as u32;
+        written += size.write_xdr(out)?;
+        out.extend_from_slice(&self);
         written += pad(written, out)?;
         Ok(written)
     }
 }
 
-impl<Out: Write> XDROut<Out> for () {
-    fn write_xdr(&self, _out: &mut Out) -> Result<u64, Error> {
+impl XDROut for () {
+    fn write_xdr(&self, _out: &mut Vec<u8>) -> Result<u64, Error> {
         Ok(0)
     }
 }
 
-impl<Out: Write> XDROut<Out> for String {
-    fn write_xdr(&self, out: &mut Out) -> Result<u64, Error> {
+impl XDROut for String {
+    fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         self.as_bytes().to_vec().write_xdr(out)
     }
 }
 
-pub fn write_fixed_array<Out: Write, T: XDROut<Out>>(
+pub fn write_fixed_array<T: XDROut>(
     val: &Vec<T>,
     size: u32,
-    out: &mut Out,
+    out: &mut Vec<u8>,
 ) -> Result<u64, Error> {
     if val.len() as u32 != size {
         return Err(Error::FixedArrayWrongSize);
@@ -135,14 +139,30 @@ pub fn write_fixed_array<Out: Write, T: XDROut<Out>>(
     for item in val {
         written += item.write_xdr(out)?;
     }
+    Ok(written)
+}
+
+pub fn write_fixed_opaque(val: &Vec<u8>, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
+    if val.len() as u32 != size {
+        return Err(Error::FixedArrayWrongSize);
+    }
+    out.extend(val);
+    let mut written = val.len() as u64;
     written += pad(written, out)?;
     Ok(written)
 }
 
-pub fn write_var_array<Out: Write, T: XDROut<Out>>(
+pub fn write_var_opaque(val: &Vec<u8>, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
+    if val.len() as u32 > size {
+        return Err(Error::BadArraySize);
+    }
+    val.write_xdr(out)
+}
+
+pub fn write_var_array<T: XDROut>(
     val: &Vec<T>,
     size: u32,
-    out: &mut Out,
+    out: &mut Vec<u8>,
 ) -> Result<u64, Error> {
     if val.len() as u32 > size {
         return Err(Error::VarArrayWrongSize);
@@ -150,12 +170,11 @@ pub fn write_var_array<Out: Write, T: XDROut<Out>>(
     val.write_xdr(out)
 }
 
-pub fn write_var_string<Out: Write>(
-    val: String,
-    size: u32,
-    out: &mut Out,
-) -> Result<u64, Error> {
-    write_var_array(&val.as_bytes().to_vec(), size, out)
+pub fn write_var_string(val: String, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
+    if val.len() as u32 > size {
+        return Err(Error::VarArrayWrongSize);
+    }
+    Ok(val.write_xdr(out)?)
 }
 
 #[cfg(test)]
@@ -252,6 +271,15 @@ mod tests {
         assert_eq!(expected, actual);
     }
 
+    #[test]
+    fn test_var_opaque_empty() {
+        let to_ser: Vec<u8> = vec![];
+        let expected: Vec<u8> = vec![0, 0, 0, 0];
+        let mut actual: Vec<u8> = Vec::new();
+        to_ser.write_xdr(&mut actual).unwrap();
+        assert_eq!(expected, actual);
+    }
+
     #[derive(Default, XDROut)]
     struct TestFixedOpaqueNoPadding {
         #[array(fixed = 8)]
@@ -273,6 +301,21 @@ mod tests {
     struct TestFixedOpaquePadding {
         #[array(fixed = 5)]
         pub opaque: Vec<u8>,
+    }
+
+    #[derive(Default, XDROut)]
+    struct TestVarOpaquePadding {
+        #[array(var = 5)]
+        pub opaque: Vec<u8>,
+    }
+
+    #[test]
+    fn test_var_opaque_sized_empty() {
+        let to_ser = TestVarOpaquePadding { opaque: vec![] };
+        let expected: Vec<u8> = vec![0, 0, 0, 0];
+        let mut actual: Vec<u8> = Vec::new();
+        to_ser.write_xdr(&mut actual).unwrap();
+        assert_eq!(expected, actual);
     }
 
     #[test]
