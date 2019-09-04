@@ -1,5 +1,5 @@
 [package]
-name = "ex-dee-derive"
+name = "xdr-rs-serialize-derive"
 version = "0.1.0"
 authors = ["Kyle Bartush <kbartush@kochava.com>"]
 edition = "2018"

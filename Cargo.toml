@@ -1,8 +1,8 @@
 [package]
-name = "ex-dee"
+name = "xdr-rs-serialize"
 version = "0.1.0"
 authors = ["Kyle Bartush <kbartush@kochava.com>"]
 edition = "2018"
 
 [dependencies]
-ex-dee-derive = { path = "ex-dee-derive" }
+xdr-rs-serialize-derive = { path = "xdr-rs-serialize-derive" }

@@ -1,10 +1,10 @@
-pub mod de;
+ mod de;
 pub mod error;
 pub mod ser;
 
 #[cfg(test)]
 #[macro_use]
-extern crate ex_dee_derive;
+extern crate xdr_rs_serialize_derive;
 
 pub use de::{read_fixed_array, read_var_array, read_var_string, XDRIn};
 pub use error::Error;
