@@ -23,7 +23,8 @@ use xdr_rs_serialize::ser::XDROut;
 fn main() -> Result<(), Error> {
     let mut byte_buffer = Vec::new();
     "Hello world!".to_string().write_xdr(&mut byte_buffer)?;
-    // Notice a tuple is returned with total bytes read at pos 0.
+    // Notice that a tuple is returned with the String result at index 0 and
+    // total bytes read at index 1.
     let hello_world: String = String::read_xdr(&mut &byte_buffer)?.0;
     println!("{}", hello_world);
     Ok(())
