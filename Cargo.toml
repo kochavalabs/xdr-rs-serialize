@@ -9,7 +9,7 @@ homepage = "https://github.com/kochavalabs/xdr-rs-serialize"
 repository = "https://github.com/kochavalabs/xdr-rs-serialize"
 edition = "2018"
 keywords = ["xdr", "serialization"]
-exclude = [ "example/*", "derive/*" ]
+exclude = [ "example/*", "xdr-rs-serialize-derive/*" ]
 
 [dev-dependencies]
 xdr-rs-serialize-derive = { version = "0.1.0", path = "xdr-rs-serialize-derive" }
