@@ -1,8 +1,14 @@
 [package]
 name = "xdr-rs-serialize-derive"
 version = "0.1.0"
-authors = ["Kyle Bartush <kbartush@kochava.com>"]
+authors = ["Kochavalabs <dev@mazzaroth.io>"]
+description = "XDR object serialization for Rust"
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/kochavalabs/xdr-rs-serialize"
+repository = "https://github.com/kochavalabs/xdr-rs-serialize"
 edition = "2018"
+keywords = ["xdr", "serialization"]
 
 [dependencies]
 syn = { version = "0.15.12" , features = ["full", "extra-traits", "parsing"] }
@@ -10,4 +16,5 @@ quote = "0.6.8"
 proc-macro2 = "0.4"
 
 [lib]
+name = "xdr_rs_serialize_derive"
 proc-macro = true
