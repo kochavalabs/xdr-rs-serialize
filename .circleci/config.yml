@@ -49,6 +49,7 @@ jobs:
           command: |
             rustup toolchain install nightly
             rustup run nightly cargo test
+            rustup toolchain install stable
             rustup run stable cargo test
 workflows:
   version: 2
