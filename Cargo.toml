@@ -1,8 +1,15 @@
 [package]
 name = "xdr-rs-serialize"
 version = "0.1.0"
-authors = ["Kyle Bartush <kbartush@kochava.com>"]
+authors = ["Kochavalabs <dev@mazzaroth.io>"]
+description = "XDR object serialization for Rust"
+license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/kochavalabs/xdr-rs-serialize"
+repository = "https://github.com/kochavalabs/xdr-rs-serialize"
 edition = "2018"
+keywords = ["xdr", "serialization"]
+exclude = [ "example/*", "derive/*" ]
 
-[dependencies]
-xdr-rs-serialize-derive = { path = "xdr-rs-serialize-derive" }
+[dev-dependencies]
+xdr-rs-serialize-derive = { version = "0.1.0", path = "xdr-rs-serialize-derive" }
