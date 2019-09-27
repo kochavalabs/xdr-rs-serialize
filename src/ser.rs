@@ -171,7 +171,8 @@ pub fn write_var_array<T: XDROut>(
 }
 
 pub fn write_var_string(val: String, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
-    if val.len() as u32 > size {
+    if val.len() as u32 > size && size != 0 {
+        println!("{} {}", val.len(), size);
         return Err(Error::VarArrayWrongSize);
     }
     Ok(val.write_xdr(out)?)

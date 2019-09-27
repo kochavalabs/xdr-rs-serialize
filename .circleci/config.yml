@@ -1,0 +1,61 @@
+version: 2
+
+jobs:
+  build:
+    docker:
+      - image: circleci/rust:latest
+    steps:
+      - checkout
+      - restore_cache:
+          key: project-cache
+      - run:
+          name: Check formatting
+          command: |
+            rustfmt --version
+            cargo fmt -- --check
+      - run:
+          name: Nightly Build
+          command: |
+            rustup toolchain install nightly
+            rustup run nightly rustc --version --verbose
+            rustup run nightly cargo --version --verbose
+            rustup run nightly cargo build
+      - run:
+          name: Stable Build
+          command: |
+            rustup toolchain install stable
+            rustup run stable rustc --version --verbose
+            rustup run stable cargo --version --verbose
+            rustup run stable cargo build
+      - run:
+          name: Wasm Build
+          command: |
+            rustup toolchain install nightly
+            rustup update
+            rustup target add wasm32-unknown-unknown --toolchain nightly
+            rustup run nightly cargo build --release --target wasm32-unknown-unknown
+      - save_cache:
+          key: project-cache
+          paths:
+            - "~/.cargo"
+            - "./target"
+  test:
+    docker:
+      - image: circleci/rust:latest
+    steps:
+      - checkout
+      - run:
+          name: Test
+          command: |
+            rustup toolchain install nightly
+            rustup run nightly cargo test
+            rustup toolchain install stable
+            rustup run stable cargo test
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - build
+      - test:
+          requires:
+            - build

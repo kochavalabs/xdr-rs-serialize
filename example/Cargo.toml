@@ -1,0 +1,11 @@
+[package]
+name = "example"
+version = "0.1.0"
+authors = ["Kyle Bartush <kbartush@kochava.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+xdr-rs-serialize= { path = "../" }
+xdr-rs-serialize-derive = { path = "../xdr-rs-serialize-derive" }
