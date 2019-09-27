@@ -43,6 +43,7 @@ jobs:
     docker:
       - image: circleci/rust:latest
     steps:
+      - checkout
       - run:
           name: Test
           command: |
