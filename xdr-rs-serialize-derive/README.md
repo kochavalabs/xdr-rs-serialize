@@ -6,7 +6,7 @@ Derivation macros to derive the serialization and deserialization of objects usi
 
 ```toml
 [dependencies]
-xdr-rs-serialize = "0.1"
+xdr-rs-serialize-derive = "0.1.0"
 ```
 
 ## License
