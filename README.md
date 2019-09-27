@@ -1,5 +1,7 @@
 # XDR RS Serialize
 
+[![CircleCI](https://circleci.com/gh/kochavalabs/xdr-rs-serialize.svg?style=svg)](https://circleci.com/gh/kochavalabs/xdr-rs-serialize)
+
 Xdr-rs-serialize is a library for facilitating the (de)serialization of rust
 objects into the [XDR](https://en.wikipedia.org/wiki/External_Data_Representation)
 format.
