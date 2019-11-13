@@ -39,7 +39,10 @@ impl XDROut for bool {
     }
 
     fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
-        let to_write = if !self { "false" } else { "true" };
+        let mut to_write = "true";
+        if !self {
+            to_write = "false";
+        }
         match out.write(to_write.as_bytes()) {
             Ok(len) => Ok(len as u64),
             _ => Err(Error::BoolBadFormat),
@@ -120,7 +123,7 @@ impl XDROut for f32 {
     }
     fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         let mut to_write = self.to_string();
-        if !to_write.contains('.') {
+        if !to_write.contains(".") {
             to_write.push_str(".0")
         }
         match out.write(to_write.as_bytes()) {
@@ -139,7 +142,7 @@ impl XDROut for f64 {
     }
     fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         let mut to_write = self.to_string();
-        if !to_write.contains('.') {
+        if !to_write.contains(".") {
             to_write.push_str(".0")
         }
         match out.write(to_write.as_bytes()) {
@@ -163,23 +166,23 @@ where
         Ok(written)
     }
     fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
-        if self.is_empty() {
-            return Ok(out.write(b"[]").unwrap() as u64);
+        if self.len() == 0 {
+            return Ok(out.write("[]".as_bytes()).unwrap() as u64);
         }
 
         let mut written = 0;
-        written += out.write(b"[").unwrap() as u64;
+        written += out.write("[".as_bytes()).unwrap() as u64;
         written += self[0].write_json(out)?;
         if self.len() == 1 {
-            written += out.write(b"]").unwrap() as u64;
+            written += out.write("]".as_bytes()).unwrap() as u64;
             return Ok(written);
         }
 
         for item in &self[1..] {
-            written += out.write(b",").unwrap() as u64;
+            written += out.write(",".as_bytes()).unwrap() as u64;
             written += item.write_json(out)?;
         }
-        written += out.write(b"]").unwrap() as u64;
+        written += out.write("]".as_bytes()).unwrap() as u64;
         Ok(written)
     }
 }
@@ -194,61 +197,12 @@ impl XDROut for Vec<u8> {
         Ok(written)
     }
     fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
-        let b64 = base64::encode(&self);
-        let mut written = 0;
-        written += out.write(b"\"").unwrap() as u64;
-
-        match out.write(b64.as_bytes()) {
-            Ok(len) => {
-                written += len as u64;
-            }
-            _ => {
-                return Err(Error::IntegerBadFormat);
-            }
-        };
-        written += out.write(b"\"").unwrap() as u64;
+        let mut written: u64 = self.len() as u64;
+        let size: u32 = self.len() as u32;
+        written += size.write_json(out)?;
+        out.extend_from_slice(&self);
+        written += pad(written, out)?;
         Ok(written)
-    }
-}
-
-impl<T> XDROut for Option<T>
-where
-    T: XDROut,
-{
-    fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
-        match self {
-            None => 0u32.write_xdr(out),
-            Some(value) => {
-                let mut written = 1u32.write_xdr(out)?;
-                written += value.write_xdr(out)?;
-                Ok(written)
-            }
-        }
-    }
-    fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
-        match self {
-            None => Ok(out.write(b"[]").unwrap() as u64),
-            Some(value) => {
-                let mut written = 0;
-                written += out.write(b"[").unwrap() as u64;
-                written += value.write_json(out)?;
-                written += out.write(b"]").unwrap() as u64;
-                Ok(written)
-            }
-        }
-    }
-}
-
-impl<T> XDROut for Box<T>
-where
-    T: XDROut,
-{
-    fn write_xdr(&self, mut out: &mut Vec<u8>) -> Result<u64, Error> {
-        (**self).write_xdr(&mut out)
-    }
-
-    fn write_json(&self, mut out: &mut Vec<u8>) -> Result<u64, Error> {
-        (**self).write_json(&mut out)
     }
 }
 
@@ -256,8 +210,8 @@ impl XDROut for () {
     fn write_xdr(&self, _out: &mut Vec<u8>) -> Result<u64, Error> {
         Ok(0)
     }
-    fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
-        Ok(out.write(b"\"\"").unwrap() as u64)
+    fn write_json(&self, _out: &mut Vec<u8>) -> Result<u64, Error> {
+        Ok(0)
     }
 }
 
@@ -298,41 +252,7 @@ impl XDROut for String {
         self.as_bytes().to_vec().write_xdr(out)
     }
     fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
-        let bytes = self.as_bytes();
-        let mut written = 0;
-        let mut start = 0;
-
-        written += out.write(b"\"").unwrap();
-
-        for (i, &byte) in bytes.iter().enumerate() {
-            let escape = ESCAPE[byte as usize];
-            if escape == 0 {
-                continue;
-            }
-            if start < i {
-                written += out.write(&bytes[start..i]).unwrap();
-            }
-
-            let to_write = match escape {
-                QU => b"\\\"",
-                BS => b"\\\\",
-                BB => b"\\b",
-                FF => b"\\f",
-                NN => b"\\n",
-                RR => b"\\r",
-                TT => b"\\t",
-                _ => panic!("Invalid character"),
-            };
-
-            written += out.write(to_write).unwrap();
-
-            start = i + 1
-        }
-        if start != bytes.len() {
-            written += out.write(&bytes[start..]).unwrap();
-        }
-        written += out.write(b"\"").unwrap();
-        Ok(written as u64)
+        self.as_bytes().to_vec().write_json(out)
     }
 }
 
@@ -468,10 +388,10 @@ mod tests {
     #[test]
     fn test_bool_true_json() {
         let to_ser = true;
-        let expected: Vec<u8> = b"true".to_vec();
+        let expected: Vec<u8> = "true".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_json!(expected, actual);
+        assert_eq!(expected, actual);
     }
 
     #[test]
@@ -486,10 +406,10 @@ mod tests {
     #[test]
     fn test_bool_false_json() {
         let to_ser = false;
-        let expected: Vec<u8> = b"false".to_vec();
+        let expected: Vec<u8> = "false".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_json!(expected, actual);
+        assert_eq!(expected, actual);
     }
 
     #[test]
@@ -504,10 +424,10 @@ mod tests {
     #[test]
     fn test_int_json() {
         let to_ser: i32 = -1;
-        let expected: Vec<u8> = b"-1".to_vec();
+        let expected: Vec<u8> = "-1".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_json!(expected, actual);
+        assert_eq!(expected, actual);
     }
 
     #[test]
@@ -522,10 +442,10 @@ mod tests {
     #[test]
     fn test_uint_json() {
         let to_ser: u32 = 100;
-        let expected: Vec<u8> = b"100".to_vec();
+        let expected: Vec<u8> = "100".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_json!(expected, actual);
+        assert_eq!(expected, actual);
     }
 
     #[test]
@@ -540,10 +460,10 @@ mod tests {
     #[test]
     fn test_hyper_json() {
         let to_ser: i64 = -1;
-        let expected: Vec<u8> = b"\"-1\"".to_vec();
+        let expected: Vec<u8> = "\"-1\"".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_json!(expected, actual);
+        assert_eq!(expected, actual);
     }
 
     #[test]
@@ -558,10 +478,10 @@ mod tests {
     #[test]
     fn test_uhyper_json() {
         let to_ser: u64 = 100;
-        let expected: Vec<u8> = b"\"100\"".to_vec();
+        let expected: Vec<u8> = "\"100\"".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_json!(expected, actual);
+        assert_eq!(expected, actual);
     }
 
     #[test]
@@ -576,10 +496,10 @@ mod tests {
     #[test]
     fn test_float_json() {
         let to_ser: f32 = 1.0;
-        let expected: Vec<u8> = b"1.0".to_vec();
+        let expected: Vec<u8> = "1.0".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_json!(expected, actual);
+        assert_eq!(expected, actual);
     }
 
     #[test]
@@ -594,10 +514,10 @@ mod tests {
     #[test]
     fn test_double_json() {
         let to_ser: f64 = 1.0;
-        let expected: Vec<u8> = b"1.0".to_vec();
+        let expected: Vec<u8> = "1.0".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_json!(expected, actual);
+        assert_eq!(expected, actual);
     }
 
     #[test]
@@ -859,10 +779,10 @@ mod tests {
     #[test]
     fn test_var_array_json() {
         let to_ser: Vec<f32> = vec![1., 2., 4.1234];
-        let expected: Vec<u8> = b"[1.0,2.0,4.1234]".to_vec();
+        let expected: Vec<u8> = "[1.0,2.0,4.1234]".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_json!(expected, actual);
+        assert_eq!(expected, actual);
     }
 
     #[derive(Default, XDROut)]
