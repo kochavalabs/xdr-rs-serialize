@@ -13,3 +13,7 @@ exclude = [ "example/*", "xdr-rs-serialize-derive/*" ]
 
 [dev-dependencies]
 xdr-rs-serialize-derive = { version = "0.1.0-alpha", path = "xdr-rs-serialize-derive" }
+
+[dependencies]
+base64 = "0.11.0"
+hex = "0.4.0"
