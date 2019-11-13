@@ -2,6 +2,8 @@
 pub enum Error {
     UnknownError,
 
+    ErrorUnimplemented,
+
     ByteBadFormat,
     BoolBadFormat,
     IntegerBadFormat,
