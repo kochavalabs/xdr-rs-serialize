@@ -272,13 +272,12 @@ impl XDROut for String {
                 NN => b"\\n",
                 RR => b"\\r",
                 TT => b"\\t",
-                _ => panic!("Invalid character")
+                _ => panic!("Invalid character"),
             };
-            
+
             written += out.write(to_write).unwrap();
 
             start = i + 1
-             
         }
         if start != bytes.len() {
             written += out.write(&bytes[start..]).unwrap();
