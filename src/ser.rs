@@ -1,5 +1,8 @@
 pub use std::io::Write;
 
+extern crate base64;
+extern crate hex;
+
 use crate::error::Error;
 
 pub trait XDROut {
@@ -194,12 +197,11 @@ impl XDROut for Vec<u8> {
         Ok(written)
     }
     fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
-        let mut written: u64 = self.len() as u64;
-        let size: u32 = self.len() as u32;
-        written += size.write_json(out)?;
-        out.extend_from_slice(&self);
-        written += pad(written, out)?;
-        Ok(written)
+        let b64 = base64::encode(&self);
+        match out.write(b64.as_bytes()) {
+            Ok(len) => Ok(len as u64),
+            _ => Err(Error::IntegerBadFormat),
+        }
     }
 }
 
@@ -207,17 +209,81 @@ impl XDROut for () {
     fn write_xdr(&self, _out: &mut Vec<u8>) -> Result<u64, Error> {
         Ok(0)
     }
-    fn write_json(&self, _out: &mut Vec<u8>) -> Result<u64, Error> {
-        Ok(0)
+    fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
+        Ok(out.write("\"\"".as_bytes()).unwrap() as u64)
     }
 }
+
+const BB: u8 = b'b'; // \x08
+const TT: u8 = b't'; // \x09
+const NN: u8 = b'n'; // \x0A
+const FF: u8 = b'f'; // \x0C
+const RR: u8 = b'r'; // \x0D
+const QU: u8 = b'"'; // \x22
+const BS: u8 = b'\\'; // \x5C
+const UU: u8 = b'u'; // \x00...\x1F except the ones above
+const __: u8 = 0;
+
+// Lookup table of escape sequences. A value of b'x' at index i means that byte
+// i is escaped as "\x" in JSON. A value of 0 means that byte i is not escaped.
+static ESCAPE: [u8; 256] = [
+    //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+    UU, UU, UU, UU, UU, UU, UU, UU, BB, TT, NN, UU, FF, RR, UU, UU, // 0
+    UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, UU, // 1
+    __, __, QU, __, __, __, __, __, __, __, __, __, __, __, __, __, // 2
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 3
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 4
+    __, __, __, __, __, __, __, __, __, __, __, __, BS, __, __, __, // 5
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 6
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 7
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 8
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // 9
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // A
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // B
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // C
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // D
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // E
+    __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, __, // F
+];
 
 impl XDROut for String {
     fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         self.as_bytes().to_vec().write_xdr(out)
     }
     fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
-        self.as_bytes().to_vec().write_json(out)
+        let bytes = self.as_bytes();
+        let mut written = 0;
+        let mut start = 0;
+
+        for (i, &byte) in bytes.iter().enumerate() {
+            let escape = ESCAPE[byte as usize];
+            if escape == 0 {
+                continue;
+            }
+            if start < i {
+                written += out.write(&bytes[start..i]).unwrap();
+            }
+
+            let to_write = match escape {
+                QU => b"\\\"",
+                BS => b"\\\\",
+                BB => b"\\b",
+                FF => b"\\f",
+                NN => b"\\n",
+                RR => b"\\r",
+                TT => b"\\t",
+                _ => panic!("Invalid character")
+            };
+            
+            written += out.write(to_write).unwrap();
+
+            start = i + 1
+             
+        }
+        if start != bytes.len() {
+            written += out.write(&bytes[start..]).unwrap();
+        }
+        Ok(written as u64)
     }
 }
 
@@ -236,6 +302,17 @@ pub fn write_fixed_array<T: XDROut>(
     Ok(written)
 }
 
+pub fn write_fixed_array_json<T: XDROut>(
+    val: &Vec<T>,
+    size: u32,
+    out: &mut Vec<u8>,
+) -> Result<u64, Error> {
+    if val.len() as u32 != size {
+        return Err(Error::FixedArrayWrongSize);
+    }
+    val.write_json(out)
+}
+
 pub fn write_fixed_opaque(val: &Vec<u8>, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
     if val.len() as u32 != size {
         return Err(Error::FixedArrayWrongSize);
@@ -246,11 +323,34 @@ pub fn write_fixed_opaque(val: &Vec<u8>, size: u32, out: &mut Vec<u8>) -> Result
     Ok(written)
 }
 
+pub fn write_fixed_opaque_json(val: &Vec<u8>, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
+    let len = val.len() as u32;
+    if len != size {
+        return Err(Error::FixedArrayWrongSize);
+    }
+
+    if len <= 64 {
+        let hex = hex::encode(val);
+        return match out.write(hex.as_bytes()) {
+            Ok(len) => Ok(len as u64),
+            _ => Err(Error::IntegerBadFormat),
+        };
+    }
+    val.write_json(out)
+}
+
 pub fn write_var_opaque(val: &Vec<u8>, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
     if val.len() as u32 > size {
         return Err(Error::BadArraySize);
     }
     val.write_xdr(out)
+}
+
+pub fn write_var_opaque_json(val: &Vec<u8>, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
+    if val.len() as u32 > size {
+        return Err(Error::BadArraySize);
+    }
+    val.write_json(out)
 }
 
 pub fn write_var_array<T: XDROut>(
@@ -264,12 +364,29 @@ pub fn write_var_array<T: XDROut>(
     val.write_xdr(out)
 }
 
-pub fn write_var_string(val: String, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
-    if val.len() as u32 > size && size != 0 {
-        println!("{} {}", val.len(), size);
+pub fn write_var_array_json<T: XDROut>(
+    val: &Vec<T>,
+    size: u32,
+    out: &mut Vec<u8>,
+) -> Result<u64, Error> {
+    if val.len() as u32 > size {
         return Err(Error::VarArrayWrongSize);
     }
-    Ok(val.write_xdr(out)?)
+    val.write_json(out)
+}
+
+pub fn write_var_string(val: String, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
+    if val.len() as u32 > size && size != 0 {
+        return Err(Error::VarArrayWrongSize);
+    }
+    val.write_xdr(out)
+}
+
+pub fn write_var_string_json(val: String, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
+    if val.len() as u32 > size && size != 0 {
+        return Err(Error::VarArrayWrongSize);
+    }
+    val.write_json(out)
 }
 
 #[cfg(test)]
@@ -430,6 +547,15 @@ mod tests {
     }
 
     #[test]
+    fn test_var_opaque_json() {
+        let to_ser: Vec<u8> = vec![3, 3, 3, 4, 1, 2, 3, 4, 4, 5, 6, 100, 200];
+        let expected: Vec<u8> = "AwMDBAECAwQEBQZkyA==".as_bytes().to_vec();
+        let mut actual: Vec<u8> = Vec::new();
+        to_ser.write_json(&mut actual).unwrap();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
     fn test_var_opaque_padding() {
         let to_ser: Vec<u8> = vec![3, 3, 3, 4, 1];
         let expected: Vec<u8> = vec![0, 0, 0, 5, 3, 3, 3, 4, 1, 0, 0, 0];
@@ -505,11 +631,28 @@ mod tests {
     }
 
     #[test]
+    fn test_void_json() {
+        let expected: Vec<u8> = "\"\"".as_bytes().to_vec();
+        let mut actual: Vec<u8> = Vec::new();
+        ().write_json(&mut actual).unwrap();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
     fn test_string() {
         let to_ser: String = "hello".to_string();
         let expected: Vec<u8> = vec![0, 0, 0, 5, 104, 101, 108, 108, 111, 0, 0, 0];
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_xdr(&mut actual).unwrap();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_string_json() {
+        let to_ser: String = r#""hello""#.to_string();
+        let expected: Vec<u8> = r#"\"hello\""#.as_bytes().to_vec();
+        let mut actual: Vec<u8> = Vec::new();
+        to_ser.write_json(&mut actual).unwrap();
         assert_eq!(expected, actual);
     }
 
