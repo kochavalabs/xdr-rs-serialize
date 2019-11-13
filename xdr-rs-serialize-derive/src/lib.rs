@@ -572,6 +572,10 @@ fn impl_xdr_out_macro(ast: &syn::DeriveInput) -> TokenStream {
                         #(#json_calls)*
                         Ok(written)
                     }
+
+                    fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
+                        Err(Error::ErrorUnimplemented)
+                    }
                 }
             }
         }
@@ -594,6 +598,10 @@ fn impl_xdr_out_macro(ast: &syn::DeriveInput) -> TokenStream {
                             #(#names2::#json_matches)*
                             _ => Err(Error::InvalidEnumValue)
                         }
+                    }
+
+                    fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
+                        Err(Error::ErrorUnimplemented)
                     }
                 }
             }
