@@ -732,31 +732,6 @@ mod tests {
         assert_json!(expected, actual);
     }
 
-    #[test]
-    fn test_struct_json() {
-        let to_ser = TestStruct { one: 1.0, two: 2 };
-        let expected: Vec<u8> = r#"{"one":1.0,"two":2}"#.as_bytes().to_vec();
-        let mut actual: Vec<u8> = Vec::new();
-        to_ser.write_json(&mut actual).unwrap();
-        assert_json!(expected, actual);
-    }
-
-    #[derive(XDROut)]
-    struct TestStructSingle {
-        one: String,
-    }
-
-    #[test]
-    fn test_struct_json_single() {
-        let to_ser = TestStructSingle {
-            one: "asdf".to_string(),
-        };
-        let expected: Vec<u8> = r#"{"one":"asdf"}"#.as_bytes().to_vec();
-        let mut actual: Vec<u8> = Vec::new();
-        to_ser.write_json(&mut actual).unwrap();
-        assert_json!(expected, actual);
-    }
-
     #[derive(Default, XDROut)]
     struct TestFixed {
         #[array(fixed = 3)]
@@ -945,17 +920,17 @@ mod tests {
 
     #[test]
     fn test_enum_json() {
-        let expected_zero: Vec<u8> = b"0".to_vec();
+        let expected_zero: Vec<u8> = "0".as_bytes().to_vec();
         let mut actual_zero: Vec<u8> = Vec::new();
         TestEnum::Zero.write_json(&mut actual_zero).unwrap();
         assert_json!(expected_zero, actual_zero);
 
-        let expected_one: Vec<u8> = b"1".to_vec();
+        let expected_one: Vec<u8> = "1".as_bytes().to_vec();
         let mut actual_one: Vec<u8> = Vec::new();
         TestEnum::One.write_json(&mut actual_one).unwrap();
         assert_json!(expected_one, actual_one);
 
-        let expected_two: Vec<u8> = b"2".to_vec();
+        let expected_two: Vec<u8> = "2".as_bytes().to_vec();
         let mut actual_two: Vec<u8> = Vec::new();
         TestEnum::Two.write_json(&mut actual_two).unwrap();
         assert_json!(expected_two, actual_two);
@@ -1008,56 +983,8 @@ mod tests {
 
         let mut actual_second: Vec<u8> = Vec::new();
         let to_ser = TestStruct { one: 1.0, two: 2 };
-        let expected_second: Vec<u8> =
-            r#"{"enum":1,"value":{"one":1.0,"two":2}}"#.as_bytes().to_vec();
+        let expected_second: Vec<u8> = r#"{"enum":1,"value":{"one":1.0,"two":2}}"#.as_bytes().to_vec();
         TestUnion::Second(to_ser)
-            .write_json(&mut actual_second)
-            .unwrap();
-        assert_json!(expected_second, actual_second);
-    }
-
-    #[derive(XDROut)]
-    enum TestUnionDiscriminant {
-        #[discriminant(value = "-1")]
-        First(u32),
-        #[discriminant(value = "1")]
-        Second(TestStruct),
-    }
-
-    #[test]
-    fn test_union_discriminant() {
-        let expected_first: Vec<u8> = vec![255, 255, 255, 255, 0, 0, 0, 3];
-        let mut actual_first: Vec<u8> = Vec::new();
-        let written1 = TestUnionDiscriminant::First(3)
-            .write_xdr(&mut actual_first)
-            .unwrap();
-        assert_eq!(expected_first, actual_first);
-        assert_eq!(8, written1);
-
-        let mut actual_second: Vec<u8> = Vec::new();
-        let to_ser = TestStruct { one: 1.0, two: 2 };
-        let expected_second: Vec<u8> = vec![0, 0, 0, 1, 0x3f, 0x80, 0, 0, 0, 0, 0, 2];
-        let written2 = TestUnionDiscriminant::Second(to_ser)
-            .write_xdr(&mut actual_second)
-            .unwrap();
-        assert_eq!(expected_second, actual_second);
-        assert_eq!(12, written2);
-    }
-
-    #[test]
-    fn test_union_discriminant_json() {
-        let expected_first: Vec<u8> = r#"{"enum":-1,"value":3}"#.as_bytes().to_vec();
-        let mut actual_first: Vec<u8> = Vec::new();
-        TestUnionDiscriminant::First(3)
-            .write_json(&mut actual_first)
-            .unwrap();
-        assert_json!(expected_first, actual_first);
-
-        let mut actual_second: Vec<u8> = Vec::new();
-        let to_ser = TestStruct { one: 1.0, two: 2 };
-        let expected_second: Vec<u8> =
-            r#"{"enum":1,"value":{"one":1.0,"two":2}}"#.as_bytes().to_vec();
-        TestUnionDiscriminant::Second(to_ser)
             .write_json(&mut actual_second)
             .unwrap();
         assert_json!(expected_second, actual_second);

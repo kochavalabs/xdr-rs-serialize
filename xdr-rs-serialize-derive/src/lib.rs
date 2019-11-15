@@ -168,54 +168,6 @@ fn get_calls_enum_in_xdr(
     Ok(result)
 }
 
-fn get_calls_enum_in_json(
-    data: &syn::DataEnum,
-    enum_name: &syn::Ident,
-) -> Result<Vec<proc_macro2::TokenStream>, ()> {
-    let enums = get_enums(data)?;
-    let mut result = Vec::new();
-    for enu in enums.iter() {
-        match (&enu.name, enu.unit, enu.index, &enu.e_type) {
-            (name, true, i, None) => {
-                result.push(
-                    format!("{} => Ok({}::{}),", i, enum_name, name)
-                        .parse()
-                        .unwrap(),
-                );
-            }
-            (name, false, i, Some(typ)) => {
-                result.push(
-                    format!(
-                        "{} => {{let result = {}::read_json(enum_val.clone())?; Ok({}::{}(result))}},",
-                        i,
-                        typ.to_string().replace("<", "::<"),
-                        enum_name,
-                        name
-                    )
-                    .parse()
-                    .unwrap(),
-                );
-            }
-            (name, false, i, None) => {
-                result.push(
-                    format!(
-                        "{} => {{let result = <()>::read_json(enum_val.clone())?; Ok({}::{}(result))}},",
-                        i,
-                        enum_name,
-                        name
-                    )
-                    .parse()
-                    .unwrap(),
-                );
-            }
-            _ => {
-                return Err(());
-            }
-        }
-    }
-    Ok(result)
-}
-
 fn get_calls_enum_out_xdr(data: &syn::DataEnum) -> Result<Vec<proc_macro2::TokenStream>, ()> {
     let enums = get_enums(data)?;
     let mut result = Vec::new();
@@ -231,7 +183,7 @@ fn get_calls_enum_out_xdr(data: &syn::DataEnum) -> Result<Vec<proc_macro2::Token
             (name, false, i) => {
                 result.push(
                     format!(
-                        "{}(ref val) => {{let mut written = 0; written += ({} as i32).write_xdr(out)?; written += val.write_xdr(out)?; Ok(written)}},",
+                        "{}(ref val) => {{let mut written = 0; written += {}.write_xdr(out)?; written += val.write_xdr(out)?; Ok(written)}},",
                         name, i
                     )
                     .parse()
@@ -250,7 +202,7 @@ fn get_calls_enum_out_json(data: &syn::DataEnum) -> Result<Vec<proc_macro2::Toke
         match (&enu.name, enu.unit, enu.index) {
             (name, true, i) => {
                 result.push(
-                    format!("{} => ({} as i32).write_json(out),", name, i)
+                    format!("{} => {}.write_json(out),", name, i)
                         .parse()
                         .unwrap(),
                 );
@@ -258,7 +210,7 @@ fn get_calls_enum_out_json(data: &syn::DataEnum) -> Result<Vec<proc_macro2::Toke
             (name, false, i) => {
                 result.push(
                     format!(
-                        r#"{}(ref val) => {{let mut written = 0; written += out.write("{{\"enum\":".as_bytes()).unwrap() as u64;  written += ({} as i32).write_json(out)?; written += out.write(",\"value\":".as_bytes()).unwrap() as u64; written +=  val.write_json(out)?; written += out.write("}}".as_bytes()).unwrap() as u64; Ok(written)}},"#,
+                        r#"{}(ref val) => {{let mut written = 0; written += out.write("{{\"enum\":".as_bytes()).unwrap() as u64;  written += {}.write_json(out)?; written += out.write(",\"value\":".as_bytes()).unwrap() as u64; written +=  val.write_json(out)?; written += out.write("}}".as_bytes()).unwrap() as u64; Ok(written)}},"#,
                         name, i
                     )
                     .parse()
@@ -608,10 +560,6 @@ fn impl_xdr_out_macro(ast: &syn::DeriveInput) -> TokenStream {
                             #(#names2::#json_matches)*
                             _ => Err(Error::InvalidEnumValue)
                         }
-                    }
-
-                    fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
-                        Err(Error::ErrorUnimplemented)
                     }
                 }
             }
