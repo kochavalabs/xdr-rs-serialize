@@ -23,7 +23,7 @@ pub fn xdr_in_macro_derive(input: TokenStream) -> TokenStream {
     impl_xdr_in_macro(&ast)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Member {
     pub name: proc_macro2::Ident,
     pub v_type: proc_macro2::TokenStream,
@@ -212,7 +212,69 @@ fn get_members(data: &syn::DataStruct) -> Result<Vec<Member>, ()> {
     }
 }
 
-fn get_calls_struct_out(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+fn member_to_json_dict(mem: &Member) -> Result<String, ()> {
+    let mut lines: Vec<String> = Vec::new();
+    let name_str = format!(r#"written += out.write("\"{}\":".as_bytes()).unwrap() as u64;"#, mem.name);
+    lines.push(name_str);
+
+    let out = match (
+        &mem.name,
+        mem.fixed,
+        mem.var,
+        mem.v_type.to_string() == "String",
+        mem.v_type.to_string().replace(" ", "") == "Vec<u8>",
+    ) {
+        (name, 0, 0, false, false) => format!("written += self.{}.write_json(out)?;", name),
+        (name, fixed, 0, false, false) => format!(
+            "written += write_fixed_array_json(&self.{}, {}, out)?;",
+            name, fixed
+        ),
+        (name, fixed, 0, false, true) => format!(
+            "written += write_fixed_opaque_json(&self.{}, {}, out)?;",
+            name, fixed
+        ),
+        (name, 0, var, false, true) => format!(
+            "written += write_var_opaque_json(&self.{}, {}, out)?;",
+            name, var
+        ),
+        (name, 0, var, true, false) => format!(
+            "written += write_var_string_json(self.{}.clone(), {}, out)?;",
+            name, var
+        ),
+        (name, 0, var, false, false) => {
+            format!("written += write_var_array_json(&self.{}, {}, out)?;", name, var)
+        }
+        _ => "".to_string(),
+    };
+    lines.push(out);
+    Ok(lines.join("\n"))
+}
+
+fn get_calls_struct_out_json(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+    let members = get_members(data)?;
+    let mut lines: Vec<String> = Vec::new();
+    lines.push(r#"written += out.write("{".as_bytes()).unwrap() as u64;"#.to_string());
+    if members.len() == 0 {
+        lines.push(r#"written += out.write("}".as_bytes()).unwrap() as u64;"#.to_string());
+        return Ok(vec![lines.join("\n").parse().unwrap()]);
+    }
+    let mem = members[0].clone();
+    lines.push(member_to_json_dict(&mem)?);
+    if members.len() == 1 {
+        lines.push(r#"written += out.write("}".as_bytes()).unwrap() as u64;"#.to_string());
+        return Ok(vec![lines.join("\n").parse().unwrap()]);
+    }
+
+    for mem in members[1..].iter() {
+        lines.push(r#"written += out.write(",".as_bytes()).unwrap() as u64;"#.to_string());
+        lines.push(member_to_json_dict(mem)?);
+    }
+    lines.push(r#"written += out.write("}".as_bytes()).unwrap() as u64;"#.to_string());
+    Ok(vec![lines.join("\n").parse().unwrap()])
+
+}
+
+fn get_calls_struct_out_xdr(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
     let members = get_members(data)?;
     Ok(members
         .iter()
@@ -239,11 +301,12 @@ fn get_calls_struct_out(data: &syn::DataStruct) -> Result<Vec<proc_macro2::Token
                 )
                 .parse()
                 .unwrap(),
-                (name, 0, var, false, true) => {
-                    format!("written += write_var_opaque(&self.{}, {}, out)?;", name, var)
-                        .parse()
-                        .unwrap()
-                }
+                (name, 0, var, false, true) => format!(
+                    "written += write_var_opaque(&self.{}, {}, out)?;",
+                    name, var
+                )
+                .parse()
+                .unwrap(),
                 (name, 0, var, true, false) => format!(
                     "written += write_var_string(self.{}.clone(), {}, out)?;",
                     name, var
@@ -325,17 +388,20 @@ fn impl_xdr_out_macro(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
     let gen = match &ast.data {
         syn::Data::Struct(data) => {
-            let calls = get_calls_struct_out(data).unwrap();
+            let xdr_calls = get_calls_struct_out_xdr(data).unwrap();
+            let json_calls = get_calls_struct_out_json(data).unwrap();
             quote! {
                 impl XDROut for #name {
                     fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
                         let mut written: u64 = 0;
-                        #(#calls)*
+                        #(#xdr_calls)*
                         Ok(written)
                     }
 
                     fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
-                        Err(Error::ErrorUnimplemented)
+                        let mut written: u64 = 0;
+                        #(#json_calls)*
+                        Ok(written)
                     }
                 }
             }
