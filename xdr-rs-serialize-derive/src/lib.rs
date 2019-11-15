@@ -145,54 +145,6 @@ fn get_calls_enum_in_xdr(
     Ok(result)
 }
 
-fn get_calls_enum_in_json(
-    data: &syn::DataEnum,
-    enum_name: &syn::Ident,
-) -> Result<Vec<proc_macro2::TokenStream>, ()> {
-    let enums = get_enums(data)?;
-    let mut result = Vec::new();
-    for enu in enums.iter() {
-        match (&enu.name, enu.unit, enu.index, &enu.e_type) {
-            (name, true, i, None) => {
-                result.push(
-                    format!("{} => Ok({}::{}),", i, enum_name, name)
-                        .parse()
-                        .unwrap(),
-                );
-            }
-            (name, false, i, Some(typ)) => {
-                result.push(
-                    format!(
-                        "{} => {{let result = {}::read_json(enum_val.clone())?; Ok({}::{}(result))}},",
-                        i,
-                        typ.to_string().replace("<", "::<"),
-                        enum_name,
-                        name
-                    )
-                    .parse()
-                    .unwrap(),
-                );
-            }
-            (name, false, i, None) => {
-                result.push(
-                    format!(
-                        "{} => {{let result = <()>::read_json(enum_val.clone())?; Ok({}::{}(result))}},",
-                        i,
-                        enum_name,
-                        name
-                    )
-                    .parse()
-                    .unwrap(),
-                );
-            }
-            _ => {
-                return Err(());
-            }
-        }
-    }
-    Ok(result)
-}
-
 fn get_calls_enum_out_xdr(data: &syn::DataEnum) -> Result<Vec<proc_macro2::TokenStream>, ()> {
     let enums = get_enums(data)?;
     let mut result = Vec::new();
@@ -585,10 +537,6 @@ fn impl_xdr_out_macro(ast: &syn::DeriveInput) -> TokenStream {
                             #(#names2::#json_matches)*
                             _ => Err(Error::InvalidEnumValue)
                         }
-                    }
-
-                    fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
-                        Err(Error::ErrorUnimplemented)
                     }
                 }
             }

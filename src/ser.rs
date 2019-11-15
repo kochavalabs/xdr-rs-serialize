@@ -736,31 +736,6 @@ mod tests {
         assert_json!(expected, actual);
     }
 
-    #[test]
-    fn test_struct_json() {
-        let to_ser = TestStruct { one: 1.0, two: 2 };
-        let expected: Vec<u8> = r#"{"one":1.0,"two":2}"#.as_bytes().to_vec();
-        let mut actual: Vec<u8> = Vec::new();
-        to_ser.write_json(&mut actual).unwrap();
-        assert_json!(expected, actual);
-    }
-
-    #[derive(XDROut)]
-    struct TestStructSingle {
-        one: String,
-    }
-
-    #[test]
-    fn test_struct_json_single() {
-        let to_ser = TestStructSingle {
-            one: "asdf".to_string(),
-        };
-        let expected: Vec<u8> = r#"{"one":"asdf"}"#.as_bytes().to_vec();
-        let mut actual: Vec<u8> = Vec::new();
-        to_ser.write_json(&mut actual).unwrap();
-        assert_json!(expected, actual);
-    }
-
     #[derive(Default, XDROut)]
     struct TestFixed {
         #[array(fixed = 3)]
@@ -966,8 +941,7 @@ mod tests {
 
         let mut actual_second: Vec<u8> = Vec::new();
         let to_ser = TestStruct { one: 1.0, two: 2 };
-        let expected_second: Vec<u8> =
-            r#"{"enum":1,"value":{"one":1.0,"two":2}}"#.as_bytes().to_vec();
+        let expected_second: Vec<u8> = r#"{"enum":1,"value":{"one":1.0,"two":2}}"#.as_bytes().to_vec();
         TestUnion::Second(to_ser)
             .write_json(&mut actual_second)
             .unwrap();
