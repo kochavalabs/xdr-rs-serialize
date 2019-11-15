@@ -241,7 +241,10 @@ fn get_members(data: &syn::DataStruct) -> Result<Vec<Member>, ()> {
 
 fn member_to_json_dict(mem: &Member) -> Result<String, ()> {
     let mut lines: Vec<String> = Vec::new();
-    let name_str = format!(r#"written += out.write("\"{}\":".as_bytes()).unwrap() as u64;"#, mem.name);
+    let name_str = format!(
+        r#"written += out.write("\"{}\":".as_bytes()).unwrap() as u64;"#,
+        mem.name
+    );
     lines.push(name_str);
 
     let out = match (
@@ -268,9 +271,10 @@ fn member_to_json_dict(mem: &Member) -> Result<String, ()> {
             "written += write_var_string_json(self.{}.clone(), {}, out)?;",
             name, var
         ),
-        (name, 0, var, false, false) => {
-            format!("written += write_var_array_json(&self.{}, {}, out)?;", name, var)
-        }
+        (name, 0, var, false, false) => format!(
+            "written += write_var_array_json(&self.{}, {}, out)?;",
+            name, var
+        ),
         _ => "".to_string(),
     };
     lines.push(out);
@@ -298,7 +302,6 @@ fn get_calls_struct_out_json(data: &syn::DataStruct) -> Result<Vec<proc_macro2::
     }
     lines.push(r#"written += out.write("}".as_bytes()).unwrap() as u64;"#.to_string());
     Ok(vec![lines.join("\n").parse().unwrap()])
-
 }
 
 fn get_calls_struct_out_xdr(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
