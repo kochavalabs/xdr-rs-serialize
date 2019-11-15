@@ -941,7 +941,8 @@ mod tests {
 
         let mut actual_second: Vec<u8> = Vec::new();
         let to_ser = TestStruct { one: 1.0, two: 2 };
-        let expected_second: Vec<u8> = r#"{"enum":1,"value":{"one":1.0,"two":2}}"#.as_bytes().to_vec();
+        let expected_second: Vec<u8> =
+            r#"{"enum":1,"value":{"one":1.0,"two":2}}"#.as_bytes().to_vec();
         TestUnion::Second(to_ser)
             .write_json(&mut actual_second)
             .unwrap();
