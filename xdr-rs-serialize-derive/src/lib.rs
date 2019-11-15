@@ -145,7 +145,7 @@ fn get_calls_enum_in(
     Ok(result)
 }
 
-fn get_calls_enum_out(data: &syn::DataEnum) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+fn get_calls_enum_out_xdr(data: &syn::DataEnum) -> Result<Vec<proc_macro2::TokenStream>, ()> {
     let enums = get_enums(data)?;
     let mut result = Vec::new();
     for enu in enums.iter() {
@@ -160,7 +160,34 @@ fn get_calls_enum_out(data: &syn::DataEnum) -> Result<Vec<proc_macro2::TokenStre
             (name, false, i) => {
                 result.push(
                     format!(
-                        "{}(ref val) => {{{}.write_xdr(out)?; val.write_xdr(out)}},",
+                        "{}(ref val) => {{let mut written = 0; written += {}.write_xdr(out)?; written += val.write_xdr(out)?; Ok(written)}},",
+                        name, i
+                    )
+                    .parse()
+                    .unwrap(),
+                );
+            }
+        }
+    }
+    Ok(result)
+}
+
+fn get_calls_enum_out_json(data: &syn::DataEnum) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+    let enums = get_enums(data)?;
+    let mut result = Vec::new();
+    for enu in enums.iter() {
+        match (&enu.name, enu.unit, enu.index) {
+            (name, true, i) => {
+                result.push(
+                    format!("{} => {}.write_json(out),", name, i)
+                        .parse()
+                        .unwrap(),
+                );
+            }
+            (name, false, i) => {
+                result.push(
+                    format!(
+                        r#"{}(ref val) => {{let mut written = 0; written += out.write("{{\"enum\":".as_bytes()).unwrap() as u64;  written += {}.write_json(out)?; written += out.write(",\"value\":".as_bytes()).unwrap() as u64; written +=  val.write_json(out)?; written += out.write("}}".as_bytes()).unwrap() as u64; Ok(written)}},"#,
                         name, i
                     )
                     .parse()
@@ -407,19 +434,24 @@ fn impl_xdr_out_macro(ast: &syn::DeriveInput) -> TokenStream {
             }
         }
         syn::Data::Enum(data) => {
-            let matches = get_calls_enum_out(data).unwrap();
+            let xdr_matches = get_calls_enum_out_xdr(data).unwrap();
+            let json_matches = get_calls_enum_out_json(data).unwrap();
             let names = std::iter::repeat(name);
+            let names2 = std::iter::repeat(name);
             quote! {
                 impl XDROut for #name {
                     fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
                         match *self {
-                            #(#names::#matches)*
+                            #(#names::#xdr_matches)*
                             _ => Err(Error::InvalidEnumValue)
                         }
                     }
 
                     fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
-                        Err(Error::ErrorUnimplemented)
+                        match *self {
+                            #(#names2::#json_matches)*
+                            _ => Err(Error::InvalidEnumValue)
+                        }
                     }
                 }
             }
