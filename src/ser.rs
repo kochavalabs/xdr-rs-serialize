@@ -255,6 +255,8 @@ impl XDROut for String {
         let mut written = 0;
         let mut start = 0;
 
+        written += out.write("\"".as_bytes()).unwrap();
+
         for (i, &byte) in bytes.iter().enumerate() {
             let escape = ESCAPE[byte as usize];
             if escape == 0 {
@@ -282,6 +284,7 @@ impl XDROut for String {
         if start != bytes.len() {
             written += out.write(&bytes[start..]).unwrap();
         }
+        written += out.write("\"".as_bytes()).unwrap();
         Ok(written as u64)
     }
 }
@@ -417,7 +420,7 @@ mod tests {
         let expected: Vec<u8> = "true".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_eq!(expected, actual);
+        assert_json!(expected, actual);
     }
 
     #[test]
@@ -435,7 +438,7 @@ mod tests {
         let expected: Vec<u8> = "false".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_eq!(expected, actual);
+        assert_json!(expected, actual);
     }
 
     #[test]
@@ -453,7 +456,7 @@ mod tests {
         let expected: Vec<u8> = "-1".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_eq!(expected, actual);
+        assert_json!(expected, actual);
     }
 
     #[test]
@@ -471,7 +474,7 @@ mod tests {
         let expected: Vec<u8> = "100".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_eq!(expected, actual);
+        assert_json!(expected, actual);
     }
 
     #[test]
@@ -489,7 +492,7 @@ mod tests {
         let expected: Vec<u8> = "\"-1\"".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_eq!(expected, actual);
+        assert_json!(expected, actual);
     }
 
     #[test]
@@ -507,7 +510,7 @@ mod tests {
         let expected: Vec<u8> = "\"100\"".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_eq!(expected, actual);
+        assert_json!(expected, actual);
     }
 
     #[test]
@@ -525,7 +528,7 @@ mod tests {
         let expected: Vec<u8> = "1.0".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_eq!(expected, actual);
+        assert_json!(expected, actual);
     }
 
     #[test]
@@ -543,7 +546,7 @@ mod tests {
         let expected: Vec<u8> = "1.0".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_eq!(expected, actual);
+        assert_json!(expected, actual);
     }
 
     #[test]
@@ -561,7 +564,7 @@ mod tests {
         let expected: Vec<u8> = "AwMDBAECAwQEBQZkyA==".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_eq!(expected, actual);
+        assert_json!(expected, actual);
     }
 
     #[test]
@@ -644,7 +647,7 @@ mod tests {
         let expected: Vec<u8> = "\"\"".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         ().write_json(&mut actual).unwrap();
-        assert_eq!(expected, actual);
+        assert_json!(expected, actual);
     }
 
     #[test]
@@ -659,10 +662,10 @@ mod tests {
     #[test]
     fn test_string_json() {
         let to_ser: String = r#""hello""#.to_string();
-        let expected: Vec<u8> = r#"\"hello\""#.as_bytes().to_vec();
+        let expected: Vec<u8> = r#""\"hello\"""#.as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_eq!(expected, actual);
+        assert_json!(expected, actual);
     }
 
     #[derive(Default, XDROut)]
@@ -706,6 +709,31 @@ mod tests {
         let written = to_ser.write_xdr(&mut actual).unwrap();
         assert_eq!(expected, actual);
         assert_eq!(8, written);
+    }
+
+    #[test]
+    fn test_struct_json() {
+        let to_ser = TestStruct { one: 1.0, two: 2 };
+        let expected: Vec<u8> = r#"{"one":1.0,"two":2}"#.as_bytes().to_vec();
+        let mut actual: Vec<u8> = Vec::new();
+        to_ser.write_json(&mut actual).unwrap();
+        assert_json!(expected, actual);
+    }
+
+    #[derive(XDROut)]
+    struct TestStructSingle {
+        one: String,
+    }
+
+    #[test]
+    fn test_struct_json_single() {
+        let to_ser = TestStructSingle {
+            one: "asdf".to_string(),
+        };
+        let expected: Vec<u8> = r#"{"one":"asdf"}"#.as_bytes().to_vec();
+        let mut actual: Vec<u8> = Vec::new();
+        to_ser.write_json(&mut actual).unwrap();
+        assert_json!(expected, actual);
     }
 
     #[test]
@@ -808,7 +836,7 @@ mod tests {
         let expected: Vec<u8> = "[1.0,2.0,4.1234]".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
-        assert_eq!(expected, actual);
+        assert_json!(expected, actual);
     }
 
     #[derive(Default, XDROut)]

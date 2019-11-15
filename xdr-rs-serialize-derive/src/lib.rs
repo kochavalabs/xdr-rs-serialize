@@ -287,15 +287,10 @@ fn get_members(data: &syn::DataStruct) -> Result<Vec<Member>, ()> {
     }
 }
 
-fn member_to_json_dict(mem: &Member, skip_name: bool) -> Result<String, ()> {
+fn member_to_json_dict(mem: &Member) -> Result<String, ()> {
     let mut lines: Vec<String> = Vec::new();
-    if !skip_name {
-        let name_str = format!(
-            r#"written += out.write("\"{}\":".as_bytes()).unwrap() as u64;"#,
-            mem.name
-        );
-        lines.push(name_str);
-    }
+    let name_str = format!(r#"written += out.write("\"{}\":".as_bytes()).unwrap() as u64;"#, mem.name);
+    lines.push(name_str);
 
     let out = match (
         &mem.name,
@@ -321,10 +316,9 @@ fn member_to_json_dict(mem: &Member, skip_name: bool) -> Result<String, ()> {
             "written += write_var_string_json(self.{}.clone(), {}, out)?;",
             name, var
         ),
-        (name, 0, var, false, false) => format!(
-            "written += write_var_array_json(&self.{}, {}, out)?;",
-            name, var
-        ),
+        (name, 0, var, false, false) => {
+            format!("written += write_var_array_json(&self.{}, {}, out)?;", name, var)
+        }
         _ => "".to_string(),
     };
     lines.push(out);
@@ -334,17 +328,13 @@ fn member_to_json_dict(mem: &Member, skip_name: bool) -> Result<String, ()> {
 fn get_calls_struct_out_json(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
     let members = get_members(data)?;
     let mut lines: Vec<String> = Vec::new();
-    if members.len() == 1 && members[0].name == "t".to_string() {
-        lines.push(member_to_json_dict(&members[0], true)?);
-        return Ok(vec![lines.join("\n").parse().unwrap()]);
-    }
     lines.push(r#"written += out.write("{".as_bytes()).unwrap() as u64;"#.to_string());
     if members.len() == 0 {
         lines.push(r#"written += out.write("}".as_bytes()).unwrap() as u64;"#.to_string());
         return Ok(vec![lines.join("\n").parse().unwrap()]);
     }
     let mem = members[0].clone();
-    lines.push(member_to_json_dict(&mem, false)?);
+    lines.push(member_to_json_dict(&mem)?);
     if members.len() == 1 {
         lines.push(r#"written += out.write("}".as_bytes()).unwrap() as u64;"#.to_string());
         return Ok(vec![lines.join("\n").parse().unwrap()]);
@@ -352,10 +342,11 @@ fn get_calls_struct_out_json(data: &syn::DataStruct) -> Result<Vec<proc_macro2::
 
     for mem in members[1..].iter() {
         lines.push(r#"written += out.write(",".as_bytes()).unwrap() as u64;"#.to_string());
-        lines.push(member_to_json_dict(mem, false)?);
+        lines.push(member_to_json_dict(mem)?);
     }
     lines.push(r#"written += out.write("}".as_bytes()).unwrap() as u64;"#.to_string());
     Ok(vec![lines.join("\n").parse().unwrap()])
+
 }
 
 fn get_calls_struct_out_xdr(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
@@ -571,10 +562,6 @@ fn impl_xdr_out_macro(ast: &syn::DeriveInput) -> TokenStream {
                         let mut written: u64 = 0;
                         #(#json_calls)*
                         Ok(written)
-                    }
-
-                    fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
-                        Err(Error::ErrorUnimplemented)
                     }
                 }
             }
