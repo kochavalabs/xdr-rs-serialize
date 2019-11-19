@@ -1,4 +1,8 @@
+extern crate json;
+
 use crate::error::Error;
+
+use json::JsonValue;
 
 macro_rules! arr4 {
     ($s:ident) => {
@@ -12,13 +16,27 @@ macro_rules! arr8 {
     };
 }
 
+pub fn read_json_string<T: XDRIn>(json_str: String) -> Result<T, Error> {
+    match json::parse(&json_str) {
+        Ok(res) => T::read_json(res),
+        Err(_) => Err(Error::InvalidJson),
+    }
+}
+
 pub trait XDRIn: Sized {
     fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error>;
+    fn read_json(json: json::JsonValue) -> Result<Self, Error>;
 }
 
 impl XDRIn for () {
     fn read_xdr(_buffer: &[u8]) -> Result<(Self, u64), Error> {
         Ok(((), 0))
+    }
+    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
+        if json.is_string() && json.to_string() == "".to_string() {
+            return Ok(());
+        }
+        return Err(Error::InvalidJson);
     }
 }
 
@@ -27,6 +45,13 @@ impl XDRIn for bool {
         match i32::read_xdr(buffer) {
             Ok((1, 4)) => Ok((true, 4)),
             Ok((0, 4)) => Ok((false, 4)),
+            _ => Err(Error::BoolBadFormat),
+        }
+    }
+
+    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
+        match json {
+            JsonValue::Boolean(val) => Ok(val),
             _ => Err(Error::BoolBadFormat),
         }
     }
@@ -40,6 +65,13 @@ impl XDRIn for i32 {
         let result = i32::from_be_bytes(arr4!(buffer));
         Ok((result, 4))
     }
+
+    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
+        match json {
+            JsonValue::Number(val) => Ok(val.into()),
+            _ => Err(Error::IntegerBadFormat),
+        }
+    }
 }
 
 impl XDRIn for u32 {
@@ -49,6 +81,13 @@ impl XDRIn for u32 {
         }
         let result = u32::from_be_bytes(arr4!(buffer));
         Ok((result, 4))
+    }
+
+    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
+        match json {
+            JsonValue::Number(val) => Ok(val.into()),
+            _ => Err(Error::UnsignedIntegerBadFormat),
+        }
     }
 }
 
@@ -60,6 +99,16 @@ impl XDRIn for i64 {
         let result = i64::from_be_bytes(arr8!(buffer));
         Ok((result, 8))
     }
+
+    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
+        if json.is_string() {
+            match json.to_string().parse::<i64>() {
+                Ok(i_val) => return Ok(i_val),
+                _ => {}
+            };
+        }
+        return Err(Error::HyperBadFormat);
+    }
 }
 
 impl XDRIn for u64 {
@@ -69,6 +118,16 @@ impl XDRIn for u64 {
         }
         let result = u64::from_be_bytes(arr8!(buffer));
         Ok((result, 8))
+    }
+
+    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
+        if json.is_string() {
+            match json.to_string().parse::<u64>() {
+                Ok(i_val) => return Ok(i_val),
+                _ => {}
+            };
+        }
+        return Err(Error::UnsignedHyperBadFormat);
     }
 }
 
@@ -80,6 +139,13 @@ impl XDRIn for f32 {
         let result = f32::from_bits(u32::from_be_bytes(arr4!(buffer)));
         Ok((result, 4))
     }
+
+    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
+        match json {
+            JsonValue::Number(val) => Ok(val.into()),
+            _ => Err(Error::FloatBadFormat),
+        }
+    }
 }
 
 impl XDRIn for f64 {
@@ -89,6 +155,13 @@ impl XDRIn for f64 {
         }
         let result = f64::from_bits(u64::from_be_bytes(arr8!(buffer)));
         Ok((result, 8))
+    }
+
+    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
+        match json {
+            JsonValue::Number(num) => Ok(num.into()),
+            _ => Err(Error::DoubleBadFormat),
+        }
     }
 }
 
@@ -103,6 +176,10 @@ impl XDRIn for String {
         let result = std::str::from_utf8(&buffer[4..len + 4]).unwrap();
         read += size as u64;
         Ok((result.to_string(), read + (4 - read % 4) % 4))
+    }
+
+    fn read_json(_json: json::JsonValue) -> Result<Self, Error> {
+        Err(Error::Unimplemented)
     }
 }
 
@@ -121,6 +198,10 @@ where
         }
         Ok((result, read))
     }
+
+    fn read_json(_json: json::JsonValue) -> Result<Self, Error> {
+        Err(Error::Unimplemented)
+    }
 }
 
 impl XDRIn for Vec<u8> {
@@ -131,6 +212,10 @@ impl XDRIn for Vec<u8> {
         let result = buffer[4..size + 4].to_vec();
         read += size as u64;
         Ok((result, read + (4 - read % 4) % 4))
+    }
+
+    fn read_json(_json: json::JsonValue) -> Result<Self, Error> {
+        Err(Error::Unimplemented)
     }
 }
 
@@ -190,9 +275,23 @@ mod tests {
     }
 
     #[test]
+    fn test_bool_true_json() {
+        let to_des = "true".to_string();
+        let result: bool = read_json_string(to_des).unwrap();
+        assert_eq!(true, result);
+    }
+
+    #[test]
     fn test_bool_false() {
         let to_des: Vec<u8> = vec![0, 0, 0, 0];
         assert_eq!((false, 4), bool::read_xdr(&to_des).unwrap());
+    }
+
+    #[test]
+    fn test_bool_false_json() {
+        let to_des = "false".to_string();
+        let result: bool = read_json_string(to_des).unwrap();
+        assert_eq!(false, result);
     }
 
     #[test]
@@ -203,6 +302,10 @@ mod tests {
         assert_eq!(Err(Error::BoolBadFormat), bool::read_xdr(&err_1));
         assert_eq!(Err(Error::BoolBadFormat), bool::read_xdr(&err_2));
         assert_eq!(Err(Error::BoolBadFormat), bool::read_xdr(&err_3));
+
+        let to_des = "123".to_string();
+        let result: Result<bool, Error> = read_json_string(to_des);
+        assert_eq!(Err(Error::BoolBadFormat), result);
     }
 
     #[test]
@@ -212,9 +315,20 @@ mod tests {
     }
 
     #[test]
+    fn test_int_json() {
+        let to_des = "-123".to_string();
+        let result: i32 = read_json_string(to_des).unwrap();
+        assert_eq!(-123, result);
+    }
+
+    #[test]
     fn test_int_error() {
         let to_des: Vec<u8> = vec![255, 255, 255];
         assert_eq!(Err(Error::IntegerBadFormat), i32::read_xdr(&to_des));
+
+        let to_des = "true".to_string();
+        let result: Result<i32, Error> = read_json_string(to_des);
+        assert_eq!(Err(Error::IntegerBadFormat), result);
     }
 
     #[test]
@@ -224,9 +338,20 @@ mod tests {
     }
 
     #[test]
+    fn test_uint_json() {
+        let to_des = "123".to_string();
+        let result: u32 = read_json_string(to_des).unwrap();
+        assert_eq!(123, result);
+    }
+
+    #[test]
     fn test_uint_error() {
         let to_des: Vec<u8> = vec![255, 255, 255];
         assert_eq!(Err(Error::UnsignedIntegerBadFormat), u32::read_xdr(&to_des));
+
+        let to_des = "true".to_string();
+        let result: Result<u32, Error> = read_json_string(to_des);
+        assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
     }
 
     #[test]
@@ -236,9 +361,20 @@ mod tests {
     }
 
     #[test]
+    fn test_hyper_json() {
+        let to_des = r#""-123""#.to_string();
+        let result: i64 = read_json_string(to_des).unwrap();
+        assert_eq!(-123, result);
+    }
+
+    #[test]
     fn test_hyper_error() {
         let to_des: Vec<u8> = vec![255, 255, 255, 255, 255, 255, 255];
         assert_eq!(Err(Error::HyperBadFormat), i64::read_xdr(&to_des));
+
+        let to_des = "123".to_string();
+        let result: Result<i64, Error> = read_json_string(to_des);
+        assert_eq!(Err(Error::HyperBadFormat), result);
     }
 
     #[test]
@@ -248,9 +384,20 @@ mod tests {
     }
 
     #[test]
+    fn test_uhyper_json() {
+        let to_des = r#""123""#.to_string();
+        let result: u64 = read_json_string(to_des).unwrap();
+        assert_eq!(123, result);
+    }
+
+    #[test]
     fn test_uhyper_error() {
         let to_des: Vec<u8> = vec![255, 255, 255, 255, 255, 255, 255];
         assert_eq!(Err(Error::UnsignedHyperBadFormat), u64::read_xdr(&to_des));
+
+        let to_des = "123".to_string();
+        let result: Result<u64, Error> = read_json_string(to_des);
+        assert_eq!(Err(Error::UnsignedHyperBadFormat), result);
     }
 
     #[test]
@@ -260,9 +407,20 @@ mod tests {
     }
 
     #[test]
+    fn test_float_json() {
+        let to_des = "123.321".to_string();
+        let result: f32 = read_json_string(to_des).unwrap();
+        assert_eq!(123.321, result);
+    }
+
+    #[test]
     fn test_float_error() {
         let to_des: Vec<u8> = vec![255, 255, 255];
         assert_eq!(Err(Error::FloatBadFormat), f32::read_xdr(&to_des));
+
+        let to_des = "true".to_string();
+        let result: Result<f32, Error> = read_json_string(to_des);
+        assert_eq!(Err(Error::FloatBadFormat), result);
     }
 
     #[test]
@@ -272,9 +430,20 @@ mod tests {
     }
 
     #[test]
+    fn test_double_json() {
+        let to_des = "123.321".to_string();
+        let result: f64 = read_json_string(to_des).unwrap();
+        assert_eq!(123.321, result);
+    }
+
+    #[test]
     fn test_double_error() {
         let to_des: Vec<u8> = vec![255, 255, 255, 255, 255, 255, 255];
         assert_eq!(Err(Error::DoubleBadFormat), f64::read_xdr(&to_des));
+
+        let to_des = "true".to_string();
+        let result: Result<f64, Error> = read_json_string(to_des);
+        assert_eq!(Err(Error::DoubleBadFormat), result);
     }
 
     #[test]
