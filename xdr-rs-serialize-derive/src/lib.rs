@@ -570,15 +570,8 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
                         ))
                     }
 
-                    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
-                        let obj = match &jval {
-                            json::JsonValue::Object(o) => Some(o),
-                            _ => None
-                        };
-                        #(#json_calls)*
-                        Ok( #name {
-                            #(#struct_build_json)*
-                        })
+                    fn read_json(_json: json::JsonValue) -> Result<Self, Error> {
+                        Err(Error::Unimplemented)
                     }
                 }
 
@@ -618,6 +611,10 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
                             },
                             _ => Err(Error::InvalidEnumValue)
                         }
+                    }
+
+                    fn read_json(_json: json::JsonValue) -> Result<Self, Error> {
+                        Err(Error::Unimplemented)
                     }
                 }
             }
