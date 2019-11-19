@@ -482,6 +482,10 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
                             read
                         ))
                     }
+
+                    fn read_json(_json: json::JsonValue) -> Result<Self, Error> {
+                        Err(Error::Unimplemented)
+                    }
                 }
 
             }
@@ -496,6 +500,10 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
                             #(#matches)*
                             _ => Err(Error::InvalidEnumValue)
                         }
+                    }
+
+                    fn read_json(_json: json::JsonValue) -> Result<Self, Error> {
+                        Err(Error::Unimplemented)
                     }
                 }
             }
