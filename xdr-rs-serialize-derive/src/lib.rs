@@ -430,70 +430,46 @@ fn get_calls_struct_in_xdr(data: &syn::DataStruct) -> Result<Vec<proc_macro2::To
 
 fn get_calls_struct_in_json(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
     let members = get_members(data)?;
-    let obj_fun = |i: &proc_macro2::Ident| -> String {
-        if members.len() == 1 && members[0].name == "t" {
-            return "jval".to_string();
-        }
-        format!(
-            r#"obj.unwrap().get("{}").ok_or_else(|| Error::InvalidJson)?"#,
-            i
-        )
-    };
     Ok(members
         .iter()
         .map(|i| match (&i.name, i.fixed, i.var, &i.v_type) {
             (name, 0, 0, v_type) => format!(
-                r#"let {}_result = {}::read_json({}.clone())?;"#,
+                r#"let {}_result = {}::read_json(obj.get("{}").ok_or_else(|| Error::InvalidJson)?.clone())?;"#,
                 name,
                 v_type.to_string().replace("<", "::<"),
-                obj_fun(name)
+                name
             )
             .parse()
             .unwrap(),
             (name, fixed, 0, v_type) if v_type.to_string().replace(" ", "") != "Vec<u8>" => {
                 format!(
-                    r#"let {}_result: {} = read_fixed_array_json({}, {}.clone())?;"#,
-                    name,
-                    v_type,
-                    fixed,
-                    obj_fun(name)
+                    r#"let {}_result: {} = read_fixed_array_json({}, obj.get("{}").ok_or_else(|| Error::InvalidJson)?.clone())?;"#,
+                    name, v_type, fixed, name
                 )
                 .parse()
                 .unwrap()
             }
             (name, 0, var, v_type) if v_type.to_string() == "String" => format!(
-                r#"let {}_result: {} = read_var_string_json({}, {}.clone())?;"#,
-                name,
-                v_type,
-                var,
-                obj_fun(name)
+                r#"let {}_result: {} = read_var_string_json({}, obj.get("{}").ok_or_else(|| Error::InvalidJson)?.clone())?;"#,
+                name, v_type, var, name
             )
             .parse()
             .unwrap(),
             (name, 0, var, v_type) if v_type.to_string().replace(" ", "") != "Vec<u8>" => format!(
-                r#"let {}_result: {} = read_var_array_json({}, {}.clone())?;"#,
-                name,
-                v_type,
-                var,
-                obj_fun(name)
+                r#"let {}_result: {} = read_var_array_json({}, obj.get("{}").ok_or_else(|| Error::InvalidJson)?.clone())?;"#,
+                name, v_type, var, name
             )
             .parse()
             .unwrap(),
             (name, fixed, 0, v_type) => format!(
-                r#"let {}_result: {} = read_fixed_opaque_json({}, {}.clone())?;"#,
-                name,
-                v_type,
-                fixed,
-                obj_fun(name)
+                r#"let {}_result: {} = read_fixed_opaque_json({}, obj.get("{}").ok_or_else(|| Error::InvalidJson)?.clone())?;"#,
+                name, v_type, fixed, name
             )
             .parse()
             .unwrap(),
             (name, 0, var, v_type) => format!(
-                r#"let {}_result: {} = read_var_opaque_json({}, {}.clone())?;"#,
-                name,
-                v_type,
-                var,
-                obj_fun(name)
+                r#"let {}_result: {} = read_var_opaque_json({}, obj.get("{}").ok_or_else(|| Error::InvalidJson)?.clone())?;"#,
+                name, v_type, var, name
             )
             .parse()
             .unwrap(),
@@ -593,8 +569,16 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
                         ))
                     }
 
-                    fn read_json(_json: json::JsonValue) -> Result<Self, Error> {
-                        Err(Error::Unimplemented)
+                    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
+                        match json {
+                            json::JsonValue::Object(obj) =>  {
+                                #(#json_calls)*
+                                Ok( #name {
+                                    #(#struct_build_json)*
+                                })
+                            },
+                            _ => Err(Error::InvalidJson)
+                        }
                     }
                 }
 
