@@ -97,7 +97,7 @@ fn get_enums(data: &syn::DataEnum) -> Result<Vec<Enum>, ()> {
     Ok(members)
 }
 
-fn get_calls_enum_in(
+fn get_calls_enum_in_xdr(
     data: &syn::DataEnum,
     enum_name: &syn::Ident,
 ) -> Result<Vec<proc_macro2::TokenStream>, ()> {
@@ -129,6 +129,54 @@ fn get_calls_enum_in(
                 result.push(
                     format!(
                         "{} => {{let result = <()>::read_xdr(&buffer[..])?; Ok(({}::{}(result.0), result.1 + 4))}},",
+                        i,
+                        enum_name,
+                        name
+                    )
+                    .parse()
+                    .unwrap(),
+                );
+            }
+            _ => {
+                return Err(());
+            }
+        }
+    }
+    Ok(result)
+}
+
+fn get_calls_enum_in_json(
+    data: &syn::DataEnum,
+    enum_name: &syn::Ident,
+) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+    let enums = get_enums(data)?;
+    let mut result = Vec::new();
+    for enu in enums.iter() {
+        match (&enu.name, enu.unit, enu.index, &enu.e_type) {
+            (name, true, i, None) => {
+                result.push(
+                    format!("{} => Ok({}::{}),", i, enum_name, name)
+                        .parse()
+                        .unwrap(),
+                );
+            }
+            (name, false, i, Some(typ)) => {
+                result.push(
+                    format!(
+                        "{} => {{let result = {}::read_json(enum_val.clone())?; Ok({}::{}(result))}},",
+                        i,
+                        typ.to_string().replace("<", "::<"),
+                        enum_name,
+                        name
+                    )
+                    .parse()
+                    .unwrap(),
+                );
+            }
+            (name, false, i, None) => {
+                result.push(
+                    format!(
+                        "{} => {{let result = <()>::read_json(enum_val.clone())?; Ok({}::{}(result))}},",
                         i,
                         enum_name,
                         name
@@ -546,8 +594,8 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
                         ))
                     }
 
-                    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
-                        match json {
+                    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+                        match jval {
                             json::JsonValue::Object(obj) =>  {
                                 #(#json_calls)*
                                 Ok( #name {
@@ -562,19 +610,39 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
             }
         }
         syn::Data::Enum(data) => {
-            let matches = get_calls_enum_in(data, name).unwrap();
+            let matches_xdr = get_calls_enum_in_xdr(data, name).unwrap();
+            let matches_json1 = get_calls_enum_in_json(data, name).unwrap();
+            let matches_json2 = get_calls_enum_in_json(data, name).unwrap();
             quote! {
                 impl XDRIn for #name {
                     fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error> {
                         let enum_val = i32::read_xdr(buffer)?.0;
                         match enum_val {
-                            #(#matches)*
+                            #(#matches_xdr)*
                             _ => Err(Error::InvalidEnumValue)
                         }
                     }
 
-                    fn read_json(_json: json::JsonValue) -> Result<Self, Error> {
-                        Err(Error::Unimplemented)
+                    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+                        match jval {
+                            json::JsonValue::Object(obj) =>  {
+                                let enum_index = i32::read_json(obj.get("enum").ok_or_else(|| Error::InvalidJson)?.clone())?;
+                                let enum_val = obj.get("value").ok_or_else(|| Error::InvalidJson)?;
+                                match enum_index {
+                                    #(#matches_json1)*
+                                    _ => Err(Error::InvalidEnumValue)
+                                }
+                            },
+                            json::JsonValue::Number(num) =>  {
+                                let enum_index : i32 = num.into();
+                                let enum_val : json::JsonValue = json::JsonValue::new_object();
+                                match enum_index {
+                                    #(#matches_json2)*
+                                    _ => Err(Error::InvalidEnumValue)
+                                }
+                            },
+                            _ => Err(Error::InvalidEnumValue)
+                        }
                     }
                 }
             }
