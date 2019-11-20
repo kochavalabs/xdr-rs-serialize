@@ -168,6 +168,54 @@ fn get_calls_enum_in_xdr(
     Ok(result)
 }
 
+fn get_calls_enum_in_json(
+    data: &syn::DataEnum,
+    enum_name: &syn::Ident,
+) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+    let enums = get_enums(data)?;
+    let mut result = Vec::new();
+    for enu in enums.iter() {
+        match (&enu.name, enu.unit, enu.index, &enu.e_type) {
+            (name, true, i, None) => {
+                result.push(
+                    format!("{} => Ok({}::{}),", i, enum_name, name)
+                        .parse()
+                        .unwrap(),
+                );
+            }
+            (name, false, i, Some(typ)) => {
+                result.push(
+                    format!(
+                        "{} => {{let result = {}::read_json(enum_val.clone())?; Ok({}::{}(result))}},",
+                        i,
+                        typ.to_string().replace("<", "::<"),
+                        enum_name,
+                        name
+                    )
+                    .parse()
+                    .unwrap(),
+                );
+            }
+            (name, false, i, None) => {
+                result.push(
+                    format!(
+                        "{} => {{let result = <()>::read_json(enum_val.clone())?; Ok({}::{}(result))}},",
+                        i,
+                        enum_name,
+                        name
+                    )
+                    .parse()
+                    .unwrap(),
+                );
+            }
+            _ => {
+                return Err(());
+            }
+        }
+    }
+    Ok(result)
+}
+
 fn get_calls_enum_out_xdr(data: &syn::DataEnum) -> Result<Vec<proc_macro2::TokenStream>, ()> {
     let enums = get_enums(data)?;
     let mut result = Vec::new();
@@ -569,8 +617,8 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
                         ))
                     }
 
-                    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
-                        match json {
+                    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+                        match jval {
                             json::JsonValue::Object(obj) =>  {
                                 #(#json_calls)*
                                 Ok( #name {
@@ -609,7 +657,7 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
                                 }
                             },
                             json::JsonValue::Number(num) =>  {
-                                let enum_index : i32 = f64::from(num) as i32;
+                                let enum_index : i32 = num.into();
                                 let enum_val : json::JsonValue = json::JsonValue::new_object();
                                 match enum_index {
                                     #(#matches_json2)*
@@ -618,10 +666,6 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
                             },
                             _ => Err(Error::InvalidEnumValue)
                         }
-                    }
-
-                    fn read_json(_json: json::JsonValue) -> Result<Self, Error> {
-                        Err(Error::Unimplemented)
                     }
                 }
             }
