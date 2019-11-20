@@ -1,3 +1,4 @@
+extern crate base64;
 extern crate json;
 
 use crate::error::Error;
@@ -25,15 +26,15 @@ pub fn read_json_string<T: XDRIn>(json_str: String) -> Result<T, Error> {
 
 pub trait XDRIn: Sized {
     fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error>;
-    fn read_json(json: json::JsonValue) -> Result<Self, Error>;
+    fn read_json(jval: json::JsonValue) -> Result<Self, Error>;
 }
 
 impl XDRIn for () {
     fn read_xdr(_buffer: &[u8]) -> Result<(Self, u64), Error> {
         Ok(((), 0))
     }
-    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
-        if json.is_string() && json.to_string() == "".to_string() {
+    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+        if jval.is_string() && jval.to_string() == "".to_string() {
             return Ok(());
         }
         return Err(Error::InvalidJson);
@@ -49,8 +50,8 @@ impl XDRIn for bool {
         }
     }
 
-    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
-        match json {
+    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+        match jval {
             JsonValue::Boolean(val) => Ok(val),
             _ => Err(Error::BoolBadFormat),
         }
@@ -66,8 +67,8 @@ impl XDRIn for i32 {
         Ok((result, 4))
     }
 
-    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
-        match json {
+    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+        match jval {
             JsonValue::Number(val) => Ok(val.into()),
             _ => Err(Error::IntegerBadFormat),
         }
@@ -83,8 +84,8 @@ impl XDRIn for u32 {
         Ok((result, 4))
     }
 
-    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
-        match json {
+    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+        match jval {
             JsonValue::Number(val) => Ok(val.into()),
             _ => Err(Error::UnsignedIntegerBadFormat),
         }
@@ -100,9 +101,9 @@ impl XDRIn for i64 {
         Ok((result, 8))
     }
 
-    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
-        if json.is_string() {
-            match json.to_string().parse::<i64>() {
+    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+        if jval.is_string() {
+            match jval.to_string().parse::<i64>() {
                 Ok(i_val) => return Ok(i_val),
                 _ => {}
             };
@@ -120,9 +121,9 @@ impl XDRIn for u64 {
         Ok((result, 8))
     }
 
-    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
-        if json.is_string() {
-            match json.to_string().parse::<u64>() {
+    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+        if jval.is_string() {
+            match jval.to_string().parse::<u64>() {
                 Ok(i_val) => return Ok(i_val),
                 _ => {}
             };
@@ -140,8 +141,8 @@ impl XDRIn for f32 {
         Ok((result, 4))
     }
 
-    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
-        match json {
+    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+        match jval {
             JsonValue::Number(val) => Ok(val.into()),
             _ => Err(Error::FloatBadFormat),
         }
@@ -157,8 +158,8 @@ impl XDRIn for f64 {
         Ok((result, 8))
     }
 
-    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
-        match json {
+    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+        match jval {
             JsonValue::Number(num) => Ok(num.into()),
             _ => Err(Error::DoubleBadFormat),
         }
@@ -178,8 +179,11 @@ impl XDRIn for String {
         Ok((result.to_string(), read + (4 - read % 4) % 4))
     }
 
-    fn read_json(_json: json::JsonValue) -> Result<Self, Error> {
-        Err(Error::Unimplemented)
+    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+        if jval.is_string() {
+            return Ok(jval.to_string());
+        }
+        return Err(Error::StringBadFormat);
     }
 }
 
@@ -199,8 +203,17 @@ where
         Ok((result, read))
     }
 
-    fn read_json(_json: json::JsonValue) -> Result<Self, Error> {
-        Err(Error::Unimplemented)
+    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+        let mut result = Vec::new();
+        match jval {
+            JsonValue::Array(vals) => {
+                for val in vals {
+                    result.push(T::read_json(val)?);
+                }
+            }
+            _ => return Err(Error::InvalidJson),
+        };
+        Ok(result)
     }
 }
 
@@ -214,9 +227,23 @@ impl XDRIn for Vec<u8> {
         Ok((result, read + (4 - read % 4) % 4))
     }
 
-    fn read_json(_json: json::JsonValue) -> Result<Self, Error> {
-        Err(Error::Unimplemented)
+    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+        if jval.is_string() {
+            match base64::decode(jval.to_string().as_bytes()) {
+                Ok(val) => return Ok(val),
+                _ => return Err(Error::InvalidJson),
+            };
+        }
+        return Err(Error::InvalidJson);
     }
+}
+
+pub fn read_fixed_array_json<T: XDRIn>(size: u32, jval: json::JsonValue) -> Result<Vec<T>, Error> {
+    let result = Vec::read_json(jval)?;
+    if result.len() as u32 != size {
+        return Err(Error::BadArraySize);
+    }
+    return Ok(result);
 }
 
 pub fn read_fixed_array<T: XDRIn>(size: u32, buffer: &[u8]) -> Result<(Vec<T>, u64), Error> {
@@ -230,15 +257,8 @@ pub fn read_fixed_array<T: XDRIn>(size: u32, buffer: &[u8]) -> Result<(Vec<T>, u
     Ok((result, read))
 }
 
-pub fn read_var_array_json<T: XDRIn>(
-    max_size: u32,
-    jval: json::JsonValue,
-) -> Result<Vec<T>, Error> {
-    let result = Vec::read_json(jval)?;
-    if result.len() as u32 > max_size {
-        return Err(Error::BadArraySize);
-    }
-    Ok(result)
+pub fn read_var_array_json<T: XDRIn>(size: u32, jval: json::JsonValue) -> Result<Vec<T>, Error> {
+    Err(Error::Unimplemented)
 }
 
 pub fn read_var_array<T: XDRIn>(size: u32, buffer: &[u8]) -> Result<(Vec<T>, u64), Error> {
@@ -251,11 +271,7 @@ pub fn read_var_array<T: XDRIn>(size: u32, buffer: &[u8]) -> Result<(Vec<T>, u64
 }
 
 pub fn read_var_opaque_json(max_size: u32, jval: json::JsonValue) -> Result<Vec<u8>, Error> {
-    let result = Vec::read_json(jval)?;
-    if result.len() as u32 > max_size {
-        return Err(Error::BadArraySize);
-    }
-    Ok(result)
+    Err(Error::Unimplemented)
 }
 
 pub fn read_var_opaque(max_size: u32, buffer: &[u8]) -> Result<(Vec<u8>, u64), Error> {
@@ -268,21 +284,7 @@ pub fn read_var_opaque(max_size: u32, buffer: &[u8]) -> Result<(Vec<u8>, u64), E
 }
 
 pub fn read_fixed_opaque_json(size: u32, jval: json::JsonValue) -> Result<Vec<u8>, Error> {
-    if size <= 64 {
-        if jval.is_string() {
-            match hex::decode(jval.to_string().as_bytes()) {
-                Ok(val) => return Ok(val),
-                _ => return Err(Error::InvalidJson),
-            };
-        }
-        Err(Error::InvalidJson)
-    } else {
-        let result = Vec::read_json(jval)?;
-        if result.len() as u32 != size {
-            return Err(Error::BadArraySize);
-        }
-        Ok(result)
-    }
+    Err(Error::Unimplemented)
 }
 
 pub fn read_fixed_opaque(size: u32, buffer: &[u8]) -> Result<(Vec<u8>, u64), Error> {
@@ -299,6 +301,10 @@ pub fn read_var_string_json(max_size: u32, jval: json::JsonValue) -> Result<Stri
         return Err(Error::BadArraySize);
     }
     Ok(result)
+}
+
+pub fn read_var_string_json(max_size: u32, jval: json::JsonValue) -> Result<String, Error> {
+    Err(Error::Unimplemented)
 }
 
 pub fn read_var_string(max_size: u32, buffer: &[u8]) -> Result<(String, u64), Error> {
@@ -520,13 +526,6 @@ mod tests {
     }
 
     #[test]
-    fn test_var_array_json_string() {
-        let to_des = "\"[1, 2, 3, 4]\"".to_string();
-        let result: Vec<u32> = read_json_string(to_des).unwrap();
-        assert_eq!(vec![1, 2, 3, 4], result);
-    }
-
-    #[test]
     fn test_var_array_error() {
         let to_des: Vec<u8> = vec![0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0];
         let result: Result<(Vec<u32>, u64), Error> = Vec::read_xdr(&to_des);
@@ -555,7 +554,10 @@ mod tests {
     fn test_struct_json() {
         let to_des = r#"{"one": 1.0, "two": 34}"#.to_string();
         let result: TestStruct = read_json_string(to_des).unwrap();
-        let expected = TestStruct { one: 1.0, two: 34 };
+        let expected = TestStruct {
+            one: 1.0,
+            two: 34,
+        };
         assert_eq!(expected, result);
     }
 
