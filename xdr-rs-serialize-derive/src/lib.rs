@@ -354,7 +354,7 @@ fn get_calls_struct_out_xdr(data: &syn::DataStruct) -> Result<Vec<proc_macro2::T
         .collect())
 }
 
-fn get_calls_struct_in(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+fn get_calls_struct_in_xdr(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
     let members = get_members(data)?;
     Ok(members
         .iter()
@@ -404,12 +404,73 @@ fn get_calls_struct_in(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenS
         })
         .collect())
 }
-fn get_struct_build_in(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+
+fn get_calls_struct_in_json(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+    let members = get_members(data)?;
+    Ok(members
+        .iter()
+        .map(|i| match (&i.name, i.fixed, i.var, &i.v_type) {
+            (name, 0, 0, v_type) => format!(
+                r#"let {}_result = {}::read_json(obj.get("{}").ok_or_else(|| Error::InvalidJson)?.clone())?;"#,
+                name,
+                v_type.to_string().replace("<", "::<"),
+                name
+            )
+            .parse()
+            .unwrap(),
+            (name, fixed, 0, v_type) if v_type.to_string().replace(" ", "") != "Vec<u8>" => {
+                format!(
+                    r#"let {}_result: {} = read_fixed_array_json({}, obj.get("{}").ok_or_else(|| Error::InvalidJson)?.clone())?;"#,
+                    name, v_type, fixed, name
+                )
+                .parse()
+                .unwrap()
+            }
+            (name, 0, var, v_type) if v_type.to_string() == "String" => format!(
+                r#"let {}_result: {} = read_var_string_json({}, obj.get("{}").ok_or_else(|| Error::InvalidJson)?.clone())?;"#,
+                name, v_type, var, name
+            )
+            .parse()
+            .unwrap(),
+            (name, 0, var, v_type) if v_type.to_string().replace(" ", "") != "Vec<u8>" => format!(
+                r#"let {}_result: {} = read_var_array_json({}, obj.get("{}").ok_or_else(|| Error::InvalidJson)?.clone())?;"#,
+                name, v_type, var, name
+            )
+            .parse()
+            .unwrap(),
+            (name, fixed, 0, v_type) => format!(
+                r#"let {}_result: {} = read_fixed_opaque_json({}, obj.get("{}").ok_or_else(|| Error::InvalidJson)?.clone())?;"#,
+                name, v_type, fixed, name
+            )
+            .parse()
+            .unwrap(),
+            (name, 0, var, v_type) => format!(
+                r#"let {}_result: {} = read_var_opaque_json({}, obj.get("{}").ok_or_else(|| Error::InvalidJson)?.clone())?;"#,
+                name, v_type, var, name
+            )
+            .parse()
+            .unwrap(),
+            _ => "".to_string().parse().unwrap(),
+        })
+        .collect())
+}
+
+fn get_struct_build_in_xdr(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
     let members = get_members(data)?;
     Ok(members
         .iter()
         .map(|i| match (&i.name, i.fixed, i.var) {
             (name, _, _) => format!("{}: {}_result.0,", name, name).parse().unwrap(),
+        })
+        .collect())
+}
+
+fn get_struct_build_in_json(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+    let members = get_members(data)?;
+    Ok(members
+        .iter()
+        .map(|i| match (&i.name, i.fixed, i.var) {
+            (name, _, _) => format!("{}: {}_result,", name, name).parse().unwrap(),
         })
         .collect())
 }
@@ -468,23 +529,33 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
     let gen = match &ast.data {
         syn::Data::Struct(data) => {
-            let calls = get_calls_struct_in(data).unwrap();
-            let struct_build = get_struct_build_in(data).unwrap();
+            let xdr_calls = get_calls_struct_in_xdr(data).unwrap();
+            let json_calls = get_calls_struct_in_json(data).unwrap();
+            let struct_build_xdr = get_struct_build_in_xdr(data).unwrap();
+            let struct_build_json = get_struct_build_in_json(data).unwrap();
             quote! {
                 impl XDRIn for #name {
                     fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error> {
                         let mut read: u64 = 0;
-                        #(#calls)*
+                        #(#xdr_calls)*
                         Ok((
                             #name {
-                              #(#struct_build)*
+                              #(#struct_build_xdr)*
                             },
                             read
                         ))
                     }
 
-                    fn read_json(_json: json::JsonValue) -> Result<Self, Error> {
-                        Err(Error::Unimplemented)
+                    fn read_json(json: json::JsonValue) -> Result<Self, Error> {
+                        match json {
+                            json::JsonValue::Object(obj) =>  {
+                                #(#json_calls)*
+                                Ok( #name {
+                                    #(#struct_build_json)*
+                                })
+                            },
+                            _ => Err(Error::InvalidJson)
+                        }
                     }
                 }
 
