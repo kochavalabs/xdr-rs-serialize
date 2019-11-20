@@ -1,4 +1,5 @@
 extern crate base64;
+extern crate hex;
 extern crate json;
 
 use crate::error::Error;
@@ -257,8 +258,15 @@ pub fn read_fixed_array<T: XDRIn>(size: u32, buffer: &[u8]) -> Result<(Vec<T>, u
     Ok((result, read))
 }
 
-pub fn read_var_array_json<T: XDRIn>(size: u32, jval: json::JsonValue) -> Result<Vec<T>, Error> {
-    Err(Error::Unimplemented)
+pub fn read_var_array_json<T: XDRIn>(
+    max_size: u32,
+    jval: json::JsonValue,
+) -> Result<Vec<T>, Error> {
+    let result = Vec::read_json(jval)?;
+    if result.len() as u32 > max_size {
+        return Err(Error::BadArraySize);
+    }
+    return Ok(result);
 }
 
 pub fn read_var_array<T: XDRIn>(size: u32, buffer: &[u8]) -> Result<(Vec<T>, u64), Error> {
@@ -271,7 +279,11 @@ pub fn read_var_array<T: XDRIn>(size: u32, buffer: &[u8]) -> Result<(Vec<T>, u64
 }
 
 pub fn read_var_opaque_json(max_size: u32, jval: json::JsonValue) -> Result<Vec<u8>, Error> {
-    Err(Error::Unimplemented)
+    let result = Vec::read_json(jval)?;
+    if result.len() as u32 > max_size {
+        return Err(Error::BadArraySize);
+    }
+    return Ok(result);
 }
 
 pub fn read_var_opaque(max_size: u32, buffer: &[u8]) -> Result<(Vec<u8>, u64), Error> {
@@ -284,7 +296,21 @@ pub fn read_var_opaque(max_size: u32, buffer: &[u8]) -> Result<(Vec<u8>, u64), E
 }
 
 pub fn read_fixed_opaque_json(size: u32, jval: json::JsonValue) -> Result<Vec<u8>, Error> {
-    Err(Error::Unimplemented)
+    if size <= 64 {
+        if jval.is_string() {
+            match hex::decode(jval.to_string().as_bytes()) {
+                Ok(val) => return Ok(val),
+                _ => return Err(Error::InvalidJson),
+            };
+        }
+        return Err(Error::InvalidJson);
+    } else {
+        let result = Vec::read_json(jval)?;
+        if result.len() as u32 != size {
+            return Err(Error::BadArraySize);
+        }
+        return Ok(result);
+    }
 }
 
 pub fn read_fixed_opaque(size: u32, buffer: &[u8]) -> Result<(Vec<u8>, u64), Error> {
@@ -296,7 +322,11 @@ pub fn read_fixed_opaque(size: u32, buffer: &[u8]) -> Result<(Vec<u8>, u64), Err
 }
 
 pub fn read_var_string_json(max_size: u32, jval: json::JsonValue) -> Result<String, Error> {
-    Err(Error::Unimplemented)
+    let result = String::read_json(jval)?;
+    if result.len() as u32 > max_size {
+        return Err(Error::BadArraySize);
+    }
+    return Ok(result);
 }
 
 pub fn read_var_string(max_size: u32, buffer: &[u8]) -> Result<(String, u64), Error> {
@@ -546,10 +576,7 @@ mod tests {
     fn test_struct_json() {
         let to_des = r#"{"one": 1.0, "two": 34}"#.to_string();
         let result: TestStruct = read_json_string(to_des).unwrap();
-        let expected = TestStruct {
-            one: 1.0,
-            two: 34,
-        };
+        let expected = TestStruct { one: 1.0, two: 34 };
         assert_eq!(expected, result);
     }
 
@@ -577,6 +604,13 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_string_json() {
+        let to_des = r#""hello""#.to_string();
+        let result: String = read_json_string(to_des).unwrap();
+        assert_eq!("hello".to_string(), result);
+    }
+
     #[derive(XDRIn, Debug, PartialEq)]
     struct TestStringLength {
         #[array(var = 5)]
@@ -593,12 +627,26 @@ mod tests {
     }
 
     #[test]
+    fn test_string_length_json() {
+        let to_des = r#"{"string": "hello"}"#.to_string();
+        let result: TestStringLength = read_json_string(to_des).unwrap();
+        let expected = TestStringLength {
+            string: "hello".to_string(),
+        };
+        assert_eq!(expected, result);
+    }
+
+    #[test]
     fn test_string_length_error() {
         let to_des: Vec<u8> = vec![0, 0, 0, 7, 104, 101, 108, 108, 111, 0, 0, 0];
         assert_eq!(
             Err(Error::VarArrayWrongSize),
             TestStringLength::read_xdr(&to_des)
         );
+
+        let to_des = r#"{"string": "helloasdfasdfasdfasdf"}"#.to_string();
+        let result: Result<TestStringLength, Error> = read_json_string(to_des);
+        assert_eq!(Err(Error::BadArraySize), result);
     }
 
     #[derive(XDRIn, Debug, PartialEq)]
@@ -620,6 +668,20 @@ mod tests {
     }
 
     #[test]
+    fn test_enum_json() {
+        let to_des = "0".to_string();
+        let result0: TestEnum = read_json_string(to_des).unwrap();
+        let to_des = "1".to_string();
+        let result1: TestEnum = read_json_string(to_des).unwrap();
+        let to_des = "2".to_string();
+        let result2: TestEnum = read_json_string(to_des).unwrap();
+
+        assert_eq!(TestEnum::Zero, result0);
+        assert_eq!(TestEnum::One, result1);
+        assert_eq!(TestEnum::Two, result2);
+    }
+
+    #[test]
     fn test_enum_error() {
         let to_des1: Vec<u8> = vec![1, 0, 0, 0];
         let to_des2: Vec<u8> = vec![0, 1, 0, 1];
@@ -628,6 +690,10 @@ mod tests {
         assert_eq!(Err(Error::InvalidEnumValue), TestEnum::read_xdr(&to_des1));
         assert_eq!(Err(Error::InvalidEnumValue), TestEnum::read_xdr(&to_des2));
         assert_eq!(Err(Error::InvalidEnumValue), TestEnum::read_xdr(&to_des3));
+
+        let to_des = "4".to_string();
+        let result: Result<TestEnum, Error> = read_json_string(to_des);
+        assert_eq!(Err(Error::InvalidEnumValue), result);
     }
 
     #[derive(XDRIn, Debug, PartialEq)]
@@ -647,10 +713,24 @@ mod tests {
     }
 
     #[test]
+    fn test_fixed_opaque_short_json() {
+        let to_des = r#"{"opaque": "0000000000000000"}"#.to_string();
+        let result: TestFixedOpaqueNoPadding = read_json_string(to_des).unwrap();
+        let expected = TestFixedOpaqueNoPadding {
+            opaque: vec![0, 0, 0, 0, 0, 0, 0, 0],
+        };
+        assert_eq!(expected, result);
+    }
+
+    #[test]
     fn test_fixed_opaque_no_padding_error() {
         let to_des: Vec<u8> = vec![3, 3, 3, 4, 1, 2, 3];
         let result = TestFixedOpaqueNoPadding::read_xdr(&to_des);
         assert_eq!(Err(Error::BadArraySize), result);
+
+        let to_des = r#"{"opaque": "t000000000000000"}"#.to_string();
+        let result: Result<TestFixedOpaqueNoPadding, Error> = read_json_string(to_des);
+        assert_eq!(Err(Error::InvalidJson), result);
     }
 
     #[derive(XDRIn, Debug, PartialEq)]
@@ -693,16 +773,37 @@ mod tests {
     }
 
     #[test]
+    fn test_fixed_array_json() {
+        let to_des = r#"{"data": [1, 2, 3]}"#.to_string();
+        let result: TestFixedArray = read_json_string(to_des).unwrap();
+        let expected = TestFixedArray {
+            data: vec![1, 2, 3],
+        };
+        assert_eq!(expected, result);
+    }
+
+    #[test]
     fn test_fixed_array_error() {
         let to_des: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
         let result = TestFixedArray::read_xdr(&to_des);
         assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
+
+        let to_des = r#"{"data": [1, 2]}"#.to_string();
+        let result: Result<TestFixedArray, Error> = read_json_string(to_des);
+        assert_eq!(Err(Error::BadArraySize), result);
     }
 
     #[test]
     fn test_void() {
         let to_des: Vec<u8> = vec![];
         assert_eq!(((), 0), <()>::read_xdr(&to_des).unwrap());
+    }
+
+    #[test]
+    fn test_void_json() {
+        let to_des = r#""""#.to_string();
+        let result: () = read_json_string(to_des).unwrap();
+        assert_eq!((), result);
     }
 
     #[derive(XDRIn, Debug, PartialEq)]
@@ -720,9 +821,21 @@ mod tests {
     }
 
     #[test]
+    fn test_var_array_json_struct() {
+        let to_des = r#"{"data": [1, 2]}"#.to_string();
+        let result: TestVarArray = read_json_string(to_des).unwrap();
+        let expected = TestVarArray { data: vec![1, 2] };
+        assert_eq!(expected, result);
+    }
+
+    #[test]
     fn test_var_too_long() {
         let to_des: Vec<u8> = vec![0, 0, 0, 4];
         let result = TestVarArray::read_xdr(&to_des);
+        assert_eq!(Err(Error::BadArraySize), result);
+
+        let to_des = r#"{"data": [1, 2, 3, 4]}"#.to_string();
+        let result: Result<TestVarArray, Error> = read_json_string(to_des);
         assert_eq!(Err(Error::BadArraySize), result);
     }
 
@@ -747,6 +860,21 @@ mod tests {
     }
 
     #[test]
+    fn test_union_json() {
+        let to_des = r#"{"enum":0,"value":3}"#.to_string();
+        let result: TestUnion = read_json_string(to_des).unwrap();
+        assert_eq!(TestUnion::First(3), result);
+
+        let to_des = r#"{"enum":1,"value":{"one": 1.0, "two": 2}}"#.to_string();
+        let result: TestUnion = read_json_string(to_des).unwrap();
+        assert_eq!(TestUnion::Second(TestStruct { one: 1.0, two: 2 }), result);
+
+        let to_des = r#"{"enum":2,"value":""}"#.to_string();
+        let result: TestUnion = read_json_string(to_des).unwrap();
+        assert_eq!(TestUnion::Third(()), result);
+    }
+
+    #[test]
     fn test_union_error() {
         let to_des_1: Vec<u8> = vec![0, 0, 0, 3, 0x3f, 0x80, 0, 0, 0, 0, 0, 2];
         assert_eq!(Err(Error::InvalidEnumValue), TestUnion::read_xdr(&to_des_1));
@@ -756,5 +884,9 @@ mod tests {
             Err(Error::UnsignedIntegerBadFormat),
             TestUnion::read_xdr(&to_des_2)
         );
+
+        let to_des = r#"{"enum":0,"value": "asdf"}"#.to_string();
+        let result: Result<TestUnion, Error> = read_json_string(to_des);
+        assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
     }
 }
