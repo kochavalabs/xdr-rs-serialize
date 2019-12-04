@@ -23,7 +23,7 @@ pub fn xdr_in_macro_derive(input: TokenStream) -> TokenStream {
     impl_xdr_in_macro(&ast)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Member {
     pub name: proc_macro2::Ident,
     pub v_type: proc_macro2::TokenStream,
@@ -97,7 +97,7 @@ fn get_enums(data: &syn::DataEnum) -> Result<Vec<Enum>, ()> {
     Ok(members)
 }
 
-fn get_calls_enum_in(
+fn get_calls_enum_in_xdr(
     data: &syn::DataEnum,
     enum_name: &syn::Ident,
 ) -> Result<Vec<proc_macro2::TokenStream>, ()> {
@@ -145,7 +145,55 @@ fn get_calls_enum_in(
     Ok(result)
 }
 
-fn get_calls_enum_out(data: &syn::DataEnum) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+fn get_calls_enum_in_json(
+    data: &syn::DataEnum,
+    enum_name: &syn::Ident,
+) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+    let enums = get_enums(data)?;
+    let mut result = Vec::new();
+    for enu in enums.iter() {
+        match (&enu.name, enu.unit, enu.index, &enu.e_type) {
+            (name, true, i, None) => {
+                result.push(
+                    format!("{} => Ok({}::{}),", i, enum_name, name)
+                        .parse()
+                        .unwrap(),
+                );
+            }
+            (name, false, i, Some(typ)) => {
+                result.push(
+                    format!(
+                        "{} => {{let result = {}::read_json(enum_val.clone())?; Ok({}::{}(result))}},",
+                        i,
+                        typ.to_string().replace("<", "::<"),
+                        enum_name,
+                        name
+                    )
+                    .parse()
+                    .unwrap(),
+                );
+            }
+            (name, false, i, None) => {
+                result.push(
+                    format!(
+                        "{} => {{let result = <()>::read_json(enum_val.clone())?; Ok({}::{}(result))}},",
+                        i,
+                        enum_name,
+                        name
+                    )
+                    .parse()
+                    .unwrap(),
+                );
+            }
+            _ => {
+                return Err(());
+            }
+        }
+    }
+    Ok(result)
+}
+
+fn get_calls_enum_out_xdr(data: &syn::DataEnum) -> Result<Vec<proc_macro2::TokenStream>, ()> {
     let enums = get_enums(data)?;
     let mut result = Vec::new();
     for enu in enums.iter() {
@@ -160,7 +208,34 @@ fn get_calls_enum_out(data: &syn::DataEnum) -> Result<Vec<proc_macro2::TokenStre
             (name, false, i) => {
                 result.push(
                     format!(
-                        "{}(ref val) => {{{}.write_xdr(out)?; val.write_xdr(out)}},",
+                        "{}(ref val) => {{let mut written = 0; written += {}.write_xdr(out)?; written += val.write_xdr(out)?; Ok(written)}},",
+                        name, i
+                    )
+                    .parse()
+                    .unwrap(),
+                );
+            }
+        }
+    }
+    Ok(result)
+}
+
+fn get_calls_enum_out_json(data: &syn::DataEnum) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+    let enums = get_enums(data)?;
+    let mut result = Vec::new();
+    for enu in enums.iter() {
+        match (&enu.name, enu.unit, enu.index) {
+            (name, true, i) => {
+                result.push(
+                    format!("{} => {}.write_json(out),", name, i)
+                        .parse()
+                        .unwrap(),
+                );
+            }
+            (name, false, i) => {
+                result.push(
+                    format!(
+                        r#"{}(ref val) => {{let mut written = 0; written += out.write("{{\"enum\":".as_bytes()).unwrap() as u64;  written += {}.write_json(out)?; written += out.write(",\"value\":".as_bytes()).unwrap() as u64; written +=  val.write_json(out)?; written += out.write("}}".as_bytes()).unwrap() as u64; Ok(written)}},"#,
                         name, i
                     )
                     .parse()
@@ -212,7 +287,72 @@ fn get_members(data: &syn::DataStruct) -> Result<Vec<Member>, ()> {
     }
 }
 
-fn get_calls_struct_out(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+fn member_to_json_dict(mem: &Member) -> Result<String, ()> {
+    let mut lines: Vec<String> = Vec::new();
+    let name_str = format!(
+        r#"written += out.write("\"{}\":".as_bytes()).unwrap() as u64;"#,
+        mem.name
+    );
+    lines.push(name_str);
+
+    let out = match (
+        &mem.name,
+        mem.fixed,
+        mem.var,
+        mem.v_type.to_string() == "String",
+        mem.v_type.to_string().replace(" ", "") == "Vec<u8>",
+    ) {
+        (name, 0, 0, false, false) => format!("written += self.{}.write_json(out)?;", name),
+        (name, fixed, 0, false, false) => format!(
+            "written += write_fixed_array_json(&self.{}, {}, out)?;",
+            name, fixed
+        ),
+        (name, fixed, 0, false, true) => format!(
+            "written += write_fixed_opaque_json(&self.{}, {}, out)?;",
+            name, fixed
+        ),
+        (name, 0, var, false, true) => format!(
+            "written += write_var_opaque_json(&self.{}, {}, out)?;",
+            name, var
+        ),
+        (name, 0, var, true, false) => format!(
+            "written += write_var_string_json(self.{}.clone(), {}, out)?;",
+            name, var
+        ),
+        (name, 0, var, false, false) => format!(
+            "written += write_var_array_json(&self.{}, {}, out)?;",
+            name, var
+        ),
+        _ => "".to_string(),
+    };
+    lines.push(out);
+    Ok(lines.join("\n"))
+}
+
+fn get_calls_struct_out_json(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+    let members = get_members(data)?;
+    let mut lines: Vec<String> = Vec::new();
+    lines.push(r#"written += out.write("{".as_bytes()).unwrap() as u64;"#.to_string());
+    if members.len() == 0 {
+        lines.push(r#"written += out.write("}".as_bytes()).unwrap() as u64;"#.to_string());
+        return Ok(vec![lines.join("\n").parse().unwrap()]);
+    }
+    let mem = members[0].clone();
+    lines.push(member_to_json_dict(&mem)?);
+    if members.len() == 1 {
+        lines.push(r#"written += out.write("}".as_bytes()).unwrap() as u64;"#.to_string());
+        return Ok(vec![lines.join("\n").parse().unwrap()]);
+    }
+
+    for mem in members[1..].iter() {
+        lines.push(r#"written += out.write(",".as_bytes()).unwrap() as u64;"#.to_string());
+        lines.push(member_to_json_dict(mem)?);
+    }
+    lines.push(r#"written += out.write("}".as_bytes()).unwrap() as u64;"#.to_string());
+    Ok(vec![lines.join("\n").parse().unwrap()])
+}
+
+fn get_calls_struct_out_xdr(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
     let members = get_members(data)?;
     Ok(members
         .iter()
@@ -239,11 +379,12 @@ fn get_calls_struct_out(data: &syn::DataStruct) -> Result<Vec<proc_macro2::Token
                 )
                 .parse()
                 .unwrap(),
-                (name, 0, var, false, true) => {
-                    format!("written += write_var_opaque(&self.{}, {}, out)?;", name, var)
-                        .parse()
-                        .unwrap()
-                }
+                (name, 0, var, false, true) => format!(
+                    "written += write_var_opaque(&self.{}, {}, out)?;",
+                    name, var
+                )
+                .parse()
+                .unwrap(),
                 (name, 0, var, true, false) => format!(
                     "written += write_var_string(self.{}.clone(), {}, out)?;",
                     name, var
@@ -261,7 +402,7 @@ fn get_calls_struct_out(data: &syn::DataStruct) -> Result<Vec<proc_macro2::Token
         .collect())
 }
 
-fn get_calls_struct_in(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+fn get_calls_struct_in_xdr(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
     let members = get_members(data)?;
     Ok(members
         .iter()
@@ -311,7 +452,58 @@ fn get_calls_struct_in(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenS
         })
         .collect())
 }
-fn get_struct_build_in(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+
+fn get_calls_struct_in_json(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+    let members = get_members(data)?;
+    Ok(members
+        .iter()
+        .map(|i| match (&i.name, i.fixed, i.var, &i.v_type) {
+            (name, 0, 0, v_type) => format!(
+                r#"let {}_result = {}::read_json(obj.get("{}").ok_or_else(|| Error::InvalidJson)?.clone())?;"#,
+                name,
+                v_type.to_string().replace("<", "::<"),
+                name
+            )
+            .parse()
+            .unwrap(),
+            (name, fixed, 0, v_type) if v_type.to_string().replace(" ", "") != "Vec<u8>" => {
+                format!(
+                    r#"let {}_result: {} = read_fixed_array_json({}, obj.get("{}").ok_or_else(|| Error::InvalidJson)?.clone())?;"#,
+                    name, v_type, fixed, name
+                )
+                .parse()
+                .unwrap()
+            }
+            (name, 0, var, v_type) if v_type.to_string() == "String" => format!(
+                r#"let {}_result: {} = read_var_string_json({}, obj.get("{}").ok_or_else(|| Error::InvalidJson)?.clone())?;"#,
+                name, v_type, var, name
+            )
+            .parse()
+            .unwrap(),
+            (name, 0, var, v_type) if v_type.to_string().replace(" ", "") != "Vec<u8>" => format!(
+                r#"let {}_result: {} = read_var_array_json({}, obj.get("{}").ok_or_else(|| Error::InvalidJson)?.clone())?;"#,
+                name, v_type, var, name
+            )
+            .parse()
+            .unwrap(),
+            (name, fixed, 0, v_type) => format!(
+                r#"let {}_result: {} = read_fixed_opaque_json({}, obj.get("{}").ok_or_else(|| Error::InvalidJson)?.clone())?;"#,
+                name, v_type, fixed, name
+            )
+            .parse()
+            .unwrap(),
+            (name, 0, var, v_type) => format!(
+                r#"let {}_result: {} = read_var_opaque_json({}, obj.get("{}").ok_or_else(|| Error::InvalidJson)?.clone())?;"#,
+                name, v_type, var, name
+            )
+            .parse()
+            .unwrap(),
+            _ => "".to_string().parse().unwrap(),
+        })
+        .collect())
+}
+
+fn get_struct_build_in_xdr(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
     let members = get_members(data)?;
     Ok(members
         .iter()
@@ -321,29 +513,55 @@ fn get_struct_build_in(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenS
         .collect())
 }
 
+fn get_struct_build_in_json(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
+    let members = get_members(data)?;
+    Ok(members
+        .iter()
+        .map(|i| match (&i.name, i.fixed, i.var) {
+            (name, _, _) => format!("{}: {}_result,", name, name).parse().unwrap(),
+        })
+        .collect())
+}
+
 fn impl_xdr_out_macro(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
     let gen = match &ast.data {
         syn::Data::Struct(data) => {
-            let calls = get_calls_struct_out(data).unwrap();
+            let xdr_calls = get_calls_struct_out_xdr(data).unwrap();
+            let json_calls = get_calls_struct_out_json(data).unwrap();
             quote! {
                 impl XDROut for #name {
                     fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
                         let mut written: u64 = 0;
-                        #(#calls)*
+                        #(#xdr_calls)*
+                        Ok(written)
+                    }
+
+                    fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
+                        let mut written: u64 = 0;
+                        #(#json_calls)*
                         Ok(written)
                     }
                 }
             }
         }
         syn::Data::Enum(data) => {
-            let matches = get_calls_enum_out(data).unwrap();
+            let xdr_matches = get_calls_enum_out_xdr(data).unwrap();
+            let json_matches = get_calls_enum_out_json(data).unwrap();
             let names = std::iter::repeat(name);
+            let names2 = std::iter::repeat(name);
             quote! {
                 impl XDROut for #name {
                     fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
                         match *self {
-                            #(#names::#matches)*
+                            #(#names::#xdr_matches)*
+                            _ => Err(Error::InvalidEnumValue)
+                        }
+                    }
+
+                    fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
+                        match *self {
+                            #(#names2::#json_matches)*
                             _ => Err(Error::InvalidEnumValue)
                         }
                     }
@@ -359,32 +577,70 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
     let name = &ast.ident;
     let gen = match &ast.data {
         syn::Data::Struct(data) => {
-            let calls = get_calls_struct_in(data).unwrap();
-            let struct_build = get_struct_build_in(data).unwrap();
+            let xdr_calls = get_calls_struct_in_xdr(data).unwrap();
+            let json_calls = get_calls_struct_in_json(data).unwrap();
+            let struct_build_xdr = get_struct_build_in_xdr(data).unwrap();
+            let struct_build_json = get_struct_build_in_json(data).unwrap();
             quote! {
                 impl XDRIn for #name {
                     fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error> {
                         let mut read: u64 = 0;
-                        #(#calls)*
+                        #(#xdr_calls)*
                         Ok((
                             #name {
-                              #(#struct_build)*
+                              #(#struct_build_xdr)*
                             },
                             read
                         ))
+                    }
+
+                    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+                        match jval {
+                            json::JsonValue::Object(obj) =>  {
+                                #(#json_calls)*
+                                Ok( #name {
+                                    #(#struct_build_json)*
+                                })
+                            },
+                            _ => Err(Error::InvalidJson)
+                        }
                     }
                 }
 
             }
         }
         syn::Data::Enum(data) => {
-            let matches = get_calls_enum_in(data, name).unwrap();
+            let matches_xdr = get_calls_enum_in_xdr(data, name).unwrap();
+            let matches_json1 = get_calls_enum_in_json(data, name).unwrap();
+            let matches_json2 = get_calls_enum_in_json(data, name).unwrap();
             quote! {
                 impl XDRIn for #name {
                     fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error> {
                         let enum_val = i32::read_xdr(buffer)?.0;
                         match enum_val {
-                            #(#matches)*
+                            #(#matches_xdr)*
+                            _ => Err(Error::InvalidEnumValue)
+                        }
+                    }
+
+                    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+                        match jval {
+                            json::JsonValue::Object(obj) =>  {
+                                let enum_index = i32::read_json(obj.get("enum").ok_or_else(|| Error::InvalidJson)?.clone())?;
+                                let enum_val = obj.get("value").ok_or_else(|| Error::InvalidJson)?;
+                                match enum_index {
+                                    #(#matches_json1)*
+                                    _ => Err(Error::InvalidEnumValue)
+                                }
+                            },
+                            json::JsonValue::Number(num) =>  {
+                                let enum_index : i32 = num.into();
+                                let enum_val : json::JsonValue = json::JsonValue::new_object();
+                                match enum_index {
+                                    #(#matches_json2)*
+                                    _ => Err(Error::InvalidEnumValue)
+                                }
+                            },
                             _ => Err(Error::InvalidEnumValue)
                         }
                     }

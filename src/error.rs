@@ -2,6 +2,8 @@
 pub enum Error {
     UnknownError,
 
+    Unimplemented,
+
     ByteBadFormat,
     BoolBadFormat,
     IntegerBadFormat,
@@ -19,4 +21,6 @@ pub enum Error {
 
     BadArraySize,
     InvalidPadding,
+
+    InvalidJson,
 }
