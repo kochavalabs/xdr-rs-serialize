@@ -744,18 +744,15 @@ mod tests {
 
     #[derive(Default, XDROut)]
     struct TestFixedSingle {
-        #[array(fixed = 32)]
-        pub t: Vec<u8>,
+        #[array(fixed = 3)]
+        pub t: Vec<u32>,
     }
 
     #[test]
     fn test_fixed_array_good_json_single() {
         let mut to_ser = TestFixedSingle::default();
-        to_ser.t.extend(vec![0; 32]);
-        let expected: Vec<u8> =
-            r#""0000000000000000000000000000000000000000000000000000000000000000""#
-                .as_bytes()
-                .to_vec();
+        to_ser.t.extend(vec![1, 2, 3]);
+        let expected: Vec<u8> = r#"[1,2,3]"#.as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
         assert_json!(expected, actual);
