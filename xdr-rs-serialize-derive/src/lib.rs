@@ -287,13 +287,15 @@ fn get_members(data: &syn::DataStruct) -> Result<Vec<Member>, ()> {
     }
 }
 
-fn member_to_json_dict(mem: &Member) -> Result<String, ()> {
+fn member_to_json_dict(mem: &Member, skip_name: bool) -> Result<String, ()> {
     let mut lines: Vec<String> = Vec::new();
-    let name_str = format!(
-        r#"written += out.write("\"{}\":".as_bytes()).unwrap() as u64;"#,
-        mem.name
-    );
-    lines.push(name_str);
+    if !skip_name {
+        let name_str = format!(
+            r#"written += out.write("\"{}\":".as_bytes()).unwrap() as u64;"#,
+            mem.name
+        );
+        lines.push(name_str);
+    }
 
     let out = match (
         &mem.name,
@@ -332,13 +334,17 @@ fn member_to_json_dict(mem: &Member) -> Result<String, ()> {
 fn get_calls_struct_out_json(data: &syn::DataStruct) -> Result<Vec<proc_macro2::TokenStream>, ()> {
     let members = get_members(data)?;
     let mut lines: Vec<String> = Vec::new();
+    if members.len() == 1 && members[0].name == "t".to_string() {
+        lines.push(member_to_json_dict(&members[0], true)?);
+        return Ok(vec![lines.join("\n").parse().unwrap()]);
+    }
     lines.push(r#"written += out.write("{".as_bytes()).unwrap() as u64;"#.to_string());
     if members.len() == 0 {
         lines.push(r#"written += out.write("}".as_bytes()).unwrap() as u64;"#.to_string());
         return Ok(vec![lines.join("\n").parse().unwrap()]);
     }
     let mem = members[0].clone();
-    lines.push(member_to_json_dict(&mem)?);
+    lines.push(member_to_json_dict(&mem, false)?);
     if members.len() == 1 {
         lines.push(r#"written += out.write("}".as_bytes()).unwrap() as u64;"#.to_string());
         return Ok(vec![lines.join("\n").parse().unwrap()]);
@@ -346,7 +352,7 @@ fn get_calls_struct_out_json(data: &syn::DataStruct) -> Result<Vec<proc_macro2::
 
     for mem in members[1..].iter() {
         lines.push(r#"written += out.write(",".as_bytes()).unwrap() as u64;"#.to_string());
-        lines.push(member_to_json_dict(mem)?);
+        lines.push(member_to_json_dict(mem, false)?);
     }
     lines.push(r#"written += out.write("}".as_bytes()).unwrap() as u64;"#.to_string());
     Ok(vec![lines.join("\n").parse().unwrap()])
