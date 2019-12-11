@@ -198,10 +198,19 @@ impl XDROut for Vec<u8> {
     }
     fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         let b64 = base64::encode(&self);
+        let mut written = 0;
+        written += out.write("\"".as_bytes()).unwrap() as u64;
+
         match out.write(b64.as_bytes()) {
-            Ok(len) => Ok(len as u64),
-            _ => Err(Error::IntegerBadFormat),
-        }
+            Ok(len) => {
+                written += len as u64;
+            }
+            _ => {
+                return Err(Error::IntegerBadFormat);
+            }
+        };
+        written += out.write("\"".as_bytes()).unwrap() as u64;
+        Ok(written)
     }
 }
 
@@ -333,10 +342,18 @@ pub fn write_fixed_opaque_json(val: &Vec<u8>, size: u32, out: &mut Vec<u8>) -> R
 
     if len <= 64 {
         let hex = hex::encode(val);
-        return match out.write(hex.as_bytes()) {
-            Ok(len) => Ok(len as u64),
-            _ => Err(Error::IntegerBadFormat),
+        let mut written = 0;
+        written += out.write("\"".as_bytes()).unwrap() as u64;
+        match out.write(hex.as_bytes()) {
+            Ok(len) => {
+                written += len as u64;
+            }
+            _ => {
+                return Err(Error::IntegerBadFormat);
+            }
         };
+        written += out.write("\"".as_bytes()).unwrap() as u64;
+        return Ok(written);
     }
     val.write_json(out)
 }
@@ -561,7 +578,7 @@ mod tests {
     #[test]
     fn test_var_opaque_json() {
         let to_ser: Vec<u8> = vec![3, 3, 3, 4, 1, 2, 3, 4, 4, 5, 6, 100, 200];
-        let expected: Vec<u8> = "AwMDBAECAwQEBQZkyA==".as_bytes().to_vec();
+        let expected: Vec<u8> = "\"AwMDBAECAwQEBQZkyA==\"".as_bytes().to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
         assert_json!(expected, actual);
@@ -744,15 +761,18 @@ mod tests {
 
     #[derive(Default, XDROut)]
     struct TestFixedSingle {
-        #[array(fixed = 3)]
-        pub t: Vec<u32>,
+        #[array(fixed = 32)]
+        pub t: Vec<u8>,
     }
 
     #[test]
     fn test_fixed_array_good_json_single() {
         let mut to_ser = TestFixedSingle::default();
-        to_ser.t.extend(vec![1, 2, 3]);
-        let expected: Vec<u8> = r#"[1,2,3]"#.as_bytes().to_vec();
+        to_ser.t.extend(vec![0; 32]);
+        let expected: Vec<u8> =
+            r#""0000000000000000000000000000000000000000000000000000000000000000""#
+                .as_bytes()
+                .to_vec();
         let mut actual: Vec<u8> = Vec::new();
         to_ser.write_json(&mut actual).unwrap();
         assert_json!(expected, actual);
