@@ -488,7 +488,10 @@ fn get_calls_struct_in_json(data: &syn::DataStruct) -> Result<Vec<proc_macro2::T
         if members.len() == 1 && members[0].name == "t" {
             return "jval".to_string();
         }
-        format!(r#"obj.unwrap().get("{}").ok_or_else(|| Error::InvalidJson)?"#, i)
+        format!(
+            r#"obj.unwrap().get("{}").ok_or_else(|| Error::InvalidJson)?"#,
+            i
+        )
     };
     Ok(members
         .iter()
