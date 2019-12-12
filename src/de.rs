@@ -803,9 +803,7 @@ mod tests {
     fn test_fixed_array_json_type() {
         let to_des = r#"[1, 2, 3]"#.to_string();
         let result: TestFixedArrayType = read_json_string(to_des).unwrap();
-        let expected = TestFixedArrayType {
-            t: vec![1, 2, 3],
-        };
+        let expected = TestFixedArrayType { t: vec![1, 2, 3] };
         assert_eq!(expected, result);
     }
 
@@ -925,7 +923,7 @@ mod tests {
         let to_des = r#"[{"id":"0000000000000000000000000000000000000000000000000000000000000000","name":"sam"}]"#.to_string();
         let result: Vec<User> = read_json_string(to_des).unwrap();
         let expected: Vec<User> = vec![User {
-            id: ID { t: vec![0;32] },
+            id: ID { t: vec![0; 32] },
             name: "sam".to_string(),
         }];
         assert_eq!(expected, result);
