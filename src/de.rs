@@ -793,6 +793,20 @@ mod tests {
         assert_eq!(Err(Error::BadArraySize), result);
     }
 
+    #[derive(XDRIn, Debug, PartialEq)]
+    struct TestFixedArrayType {
+        #[array(fixed = 3)]
+        pub t: Vec<u32>,
+    }
+
+    #[test]
+    fn test_fixed_array_json_type() {
+        let to_des = r#"[1, 2, 3]"#.to_string();
+        let result: TestFixedArrayType = read_json_string(to_des).unwrap();
+        let expected = TestFixedArrayType { t: vec![1, 2, 3] };
+        assert_eq!(expected, result);
+    }
+
     #[test]
     fn test_void() {
         let to_des: Vec<u8> = vec![];
@@ -888,5 +902,30 @@ mod tests {
         let to_des = r#"{"enum":0,"value": "asdf"}"#.to_string();
         let result: Result<TestUnion, Error> = read_json_string(to_des);
         assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
+    }
+
+    #[derive(XDRIn, Debug, PartialEq)]
+    pub struct ID {
+        #[array(fixed = 32)]
+        pub t: Vec<u8>,
+    }
+
+    #[derive(XDRIn, Debug, PartialEq)]
+    pub struct User {
+        pub id: ID,
+
+        #[array(var = 80)]
+        pub name: String,
+    }
+
+    #[test]
+    fn test_array_complex() {
+        let to_des = r#"[{"id":"0000000000000000000000000000000000000000000000000000000000000000","name":"sam"}]"#.to_string();
+        let result: Vec<User> = read_json_string(to_des).unwrap();
+        let expected: Vec<User> = vec![User {
+            id: ID { t: vec![0; 32] },
+            name: "sam".to_string(),
+        }];
+        assert_eq!(expected, result);
     }
 }
