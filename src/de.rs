@@ -206,6 +206,12 @@ where
 
     fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
         let mut result = Vec::new();
+        if jval.is_string() {
+            match json::parse(&jval.to_string()) {
+                Ok(res) => return Self::read_json(res),
+                Err(_) => return Err(Error::InvalidJson),
+            };
+        }
         match jval {
             JsonValue::Array(vals) => {
                 for val in vals {
@@ -543,6 +549,13 @@ mod tests {
     #[test]
     fn test_var_array_json() {
         let to_des = "[1, 2, 3, 4]".to_string();
+        let result: Vec<u32> = read_json_string(to_des).unwrap();
+        assert_eq!(vec![1, 2, 3, 4], result);
+    }
+
+    #[test]
+    fn test_var_array_json_string() {
+        let to_des = "\"[1, 2, 3, 4]\"".to_string();
         let result: Vec<u32> = read_json_string(to_des).unwrap();
         assert_eq!(vec![1, 2, 3, 4], result);
     }
