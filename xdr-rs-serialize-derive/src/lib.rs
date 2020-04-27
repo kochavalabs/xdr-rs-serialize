@@ -663,7 +663,7 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
                                 }
                             },
                             json::JsonValue::Number(num) =>  {
-                                let enum_index : i32 = num.into();
+                                let enum_index : i32 = f64::from(num) as i32;
                                 let enum_val : json::JsonValue = json::JsonValue::new_object();
                                 match enum_index {
                                     #(#matches_json2)*
