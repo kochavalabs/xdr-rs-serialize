@@ -70,7 +70,7 @@ impl XDRIn for i32 {
 
     fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
         match jval {
-            JsonValue::Number(val) => Ok(val.into()),
+            JsonValue::Number(val) => Ok(f64::from(val) as i32),
             _ => Err(Error::IntegerBadFormat),
         }
     }
@@ -87,7 +87,7 @@ impl XDRIn for u32 {
 
     fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
         match jval {
-            JsonValue::Number(val) => Ok(val.into()),
+            JsonValue::Number(val) => Ok(f64::from(val) as u32),
             _ => Err(Error::UnsignedIntegerBadFormat),
         }
     }
