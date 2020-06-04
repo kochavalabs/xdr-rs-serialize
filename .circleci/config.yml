@@ -20,11 +20,15 @@ jobs:
           name: update dependencies if releasing
           command: |
             if [[ "$CIRCLE_BRANCH" =~ release/v.* ]]; then
+              cargo install cargo-edit
+              grep branch Cargo.toml | grep develop | awk '{print $1}' | xargs -I[] cargo add --allow-prerelease []
+              sed -i 's/branch = "develop", //g' Cargo.toml
               export CARGO_VER=$(echo $CIRCLE_BRANCH | sed 's:release/v::')
-              sed -i "s/^xdr-rs-serialize-derive.*/xdr-rs-serialize-derive = { version = \"$CARGO_VER\", path = \"xdr-rs-serialize-derive\" }/" Cargo.toml
               sed -i "s/^version.*/version = \"$CARGO_VER\"/" Cargo.toml
-              sed -i "s/^version.*/version = \"$CARGO_VER\"/" xdr-rs-serialize-derive/Cargo.toml
             fi
+      - run:
+          name: debug
+          command: cat Cargo.toml
       - run:
           name: Stable Build
           command: |
@@ -44,7 +48,6 @@ jobs:
             - ~/.cargo
             - ./target
             - Cargo.toml
-            - xdr-rs-serialize-derive/Cargo.toml
 
   test:
     executor: rust-latest
@@ -60,7 +63,6 @@ jobs:
 
   publish-latest:
     executor: rust-latest
-    steps:
       - checkout
       - restore_cache:
           key: git-sha-{{ .Revision }}{{ .Branch }}
@@ -69,24 +71,23 @@ jobs:
           command: cargo login $cargo_TOKEN
       - run:
           name: setup git config
-          command: git config user.email "dev@mazzaroth.io" && git config user.name "CircleCI" && git config --global core.editor "\usr\local\bin\subl -n -w"
+          command: git config user.email "dev@mazzaroth.io" && git config user.name "CricleCI" && git config --global core.editor "\usr\local\bin\subl -n -w"
       - run:
           name: commit updates
           command: git add -A && git commit -m "Dependency/Version update for $CIRCLE_BRANCH"
       - run:
-          name: cargo publish
-          command: |
-            cargo publish --manifest-path xdr-rs-serialize-derive/Cargo.toml
-            sleep 10
-            cargo publish
+          name: pull latest from master
+          command: git pull --no-edit -Xours --rebase origin master
       - run:
           name: update master
-          command: git rebase -Xtheirs origin/master && git push origin $CIRCLE_BRANCH:master
+          command: git checkout master && git rebase -Xtheirs $CIRCLE_BRANCH && git push origin master
+      - run:
+          name: cargo publish
+          command: cargo publish
       - run:
           name: tag release
           command: |
-            export GIT_TAG=$(echo $CIRCLE_BRANCH | sed 's:release/::')
-            git checkout master
+            env GIT_TAG=$(echo $CIRCLE_BRANCH | sed 's:release/::')
             git tag $GIT_TAG
             git push origin $GIT_TAG
       - run:
@@ -97,8 +98,6 @@ jobs:
           command: |
             export RELEASE_VERSION=$(echo $CIRCLE_BRANCH | sed 's:release/v::')
             sed -i "s/^version.*/version = \"$RELEASE_VERSION\"/" Cargo.toml
-            sed -i "s/^version.*/version = \"$RELEASE_VERSION\"/" xdr-rs-serialize-derive/Cargo.toml
-            sed -i "s/^xdr-rs-serialize-derive.*/xdr-rs-serialize-derive = { version = \"$RELEASE_VERSION\", path = \"xdr-rs-serialize-derive\" }/" Cargo.toml
       - run:
           name: commit updates
           command: git add -A && git commit -m "Version update for $CIRCLE_BRANCH" && git push origin develop
