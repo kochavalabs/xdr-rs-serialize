@@ -1,28 +1,38 @@
-version: 2
+version: 2.1
+
+executors:
+  rust-latest:
+    working_directory: ~/repo
+    docker:
+      - image: circleci/rust:latest
 
 jobs:
   build:
-    docker:
-      - image: circleci/rust:latest
+    executor: rust-latest
     steps:
       - checkout
-      - restore_cache:
-          key: project-cache
       - run:
           name: Check formatting
           command: |
             rustfmt --version
             cargo fmt -- --check
       - run:
-          name: Nightly Build
+          name: update dependencies if releasing
           command: |
-            rustup toolchain install nightly
-            rustup run nightly rustc --version --verbose
-            rustup run nightly cargo --version --verbose
-            rustup run nightly cargo build
+            if [[ "$CIRCLE_BRANCH" =~ release/v.* ]]; then
+              cargo install cargo-edit
+              grep branch Cargo.toml | grep develop | awk '{print $1}' | xargs -I[] cargo add --allow-prerelease []
+              sed -i 's/branch = "develop", //g' Cargo.toml
+              export CARGO_VER=$(echo $CIRCLE_BRANCH | sed 's:release/v::')
+              sed -i "s/^version.*/version = \"$CARGO_VER\"/" Cargo.toml
+            fi
+      - run:
+          name: debug
+          command: cat Cargo.toml
       - run:
           name: Stable Build
           command: |
+            rustup update
             rustup toolchain install stable
             rustup run stable rustc --version --verbose
             rustup run stable cargo --version --verbose
@@ -30,32 +40,80 @@ jobs:
       - run:
           name: Wasm Build
           command: |
-            rustup toolchain install nightly
-            rustup update
-            rustup target add wasm32-unknown-unknown --toolchain nightly
-            rustup run nightly cargo build --release --target wasm32-unknown-unknown
+            rustup target add wasm32-unknown-unknown --toolchain stable
+            rustup run stable cargo build --release --target wasm32-unknown-unknown
       - save_cache:
-          key: project-cache
+          key: git-sha-{{ .Revision }}{{ .Branch }}
           paths:
-            - "~/.cargo"
-            - "./target"
+            - ~/.cargo
+            - ./target
+            - Cargo.toml
+
   test:
-    docker:
-      - image: circleci/rust:latest
+    executor: rust-latest
     steps:
       - checkout
+      - restore_cache:
+          key: git-sha-{{ .Revision }}{{ .Branch }}
       - run:
           name: Test
           command: |
-            rustup toolchain install nightly
-            rustup run nightly cargo test
             rustup toolchain install stable
             rustup run stable cargo test
+
+  publish-latest:
+    executor: rust-latest
+      - checkout
+      - restore_cache:
+          key: git-sha-{{ .Revision }}{{ .Branch }}
+      - run:
+          name: cargo login
+          command: cargo login $cargo_TOKEN
+      - run:
+          name: setup git config
+          command: git config user.email "dev@mazzaroth.io" && git config user.name "CricleCI" && git config --global core.editor "\usr\local\bin\subl -n -w"
+      - run:
+          name: commit updates
+          command: git add -A && git commit -m "Dependency/Version update for $CIRCLE_BRANCH"
+      - run:
+          name: pull latest from master
+          command: git pull --no-edit -Xours --rebase origin master
+      - run:
+          name: update master
+          command: git checkout master && git rebase -Xtheirs $CIRCLE_BRANCH && git push origin master
+      - run:
+          name: cargo publish
+          command: cargo publish
+      - run:
+          name: tag release
+          command: |
+            env GIT_TAG=$(echo $CIRCLE_BRANCH | sed 's:release/::')
+            git tag $GIT_TAG
+            git push origin $GIT_TAG
+      - run:
+          name: checkout and develop
+          command: git checkout develop
+      - run:
+          name: update develop version
+          command: |
+            export RELEASE_VERSION=$(echo $CIRCLE_BRANCH | sed 's:release/v::')
+            sed -i "s/^version.*/version = \"$RELEASE_VERSION\"/" Cargo.toml
+      - run:
+          name: commit updates
+          command: git add -A && git commit -m "Version update for $CIRCLE_BRANCH" && git push origin develop
+
+
 workflows:
-  version: 2
-  build_and_test:
+  version: 2.1
+  build_test_deploy:
     jobs:
       - build
       - test:
           requires:
             - build
+      - publish-latest:
+          requires:
+            - test
+          filters:
+            branches:
+              only: /release\/v([0-9]+)\.([0-9]+)\.([0-9]+)$/
