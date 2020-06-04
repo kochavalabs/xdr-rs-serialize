@@ -63,6 +63,7 @@ jobs:
 
   publish-latest:
     executor: rust-latest
+    steps:
       - checkout
       - restore_cache:
           key: git-sha-{{ .Revision }}{{ .Branch }}
