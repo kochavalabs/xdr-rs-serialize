@@ -82,7 +82,7 @@ jobs:
       - run:
           name: cargo publish
           command: |
-            cargo publish --manifest-path xdr-rs-seralize-derive/Cargo.toml
+            cargo publish --manifest-path xdr-rs-serialize-derive/Cargo.toml
             sleep 10
             cargo publish
       - run:
