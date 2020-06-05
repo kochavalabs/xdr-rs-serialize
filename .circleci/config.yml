@@ -21,6 +21,7 @@ jobs:
           command: |
             if [[ "$CIRCLE_BRANCH" =~ release/v.* ]]; then
               export CARGO_VER=$(echo $CIRCLE_BRANCH | sed 's:release/v::')
+              sed -i "s/^xdr-rs-serialize-derive.*/xdr-rs-serialize-derive = { version = \"$CARGO_VER\", path = \"xdr-rs-serialize-derive\" }/"
               sed -i "s/^version.*/version = \"$CARGO_VER\"/" Cargo.toml
               sed -i "s/^version.*/version = \"$CARGO_VER\"/" xdr-rs-serialize-derive/Cargo.toml
             fi
