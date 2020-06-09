@@ -69,16 +69,10 @@ jobs:
           command: cargo login $cargo_TOKEN
       - run:
           name: setup git config
-          command: git config user.email "dev@mazzaroth.io" && git config user.name "CricleCI" && git config --global core.editor "\usr\local\bin\subl -n -w"
+          command: git config user.email "dev@mazzaroth.io" && git config user.name "CircleCI" && git config --global core.editor "\usr\local\bin\subl -n -w"
       - run:
           name: commit updates
           command: git add -A && git commit -m "Dependency/Version update for $CIRCLE_BRANCH"
-      - run:
-          name: pull latest from master
-          command: git pull --no-edit -Xours --rebase origin master
-      - run:
-          name: update master
-          command: git checkout master && git rebase -Xtheirs $CIRCLE_BRANCH && git push origin master
       - run:
           name: cargo publish
           command: |
@@ -86,9 +80,13 @@ jobs:
             sleep 10
             cargo publish
       - run:
+          name: update master
+          command: git rebase -Xtheirs origin/master && git push origin $CIRCLE_BRANCH:master
+      - run:
           name: tag release
           command: |
             env GIT_TAG=$(echo $CIRCLE_BRANCH | sed 's:release/::')
+            git checkout master
             git tag $GIT_TAG
             git push origin $GIT_TAG
       - run:
