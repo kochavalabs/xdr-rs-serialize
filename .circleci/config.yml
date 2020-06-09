@@ -86,8 +86,9 @@ jobs:
           name: tag release
           command: |
             env GIT_TAG=$(echo $CIRCLE_BRANCH | sed 's:release/::')
+            git checkout master
             git tag $GIT_TAG
-            git push --set-upstream origin $GIT_TAG
+            git push origin $GIT_TAG
       - run:
           name: checkout and develop
           command: git checkout develop
