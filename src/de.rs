@@ -35,10 +35,10 @@ impl XDRIn for () {
         Ok(((), 0))
     }
     fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
-        if jval.is_string() && jval.to_string() == "".to_string() {
+        if jval.is_string() && jval == "" {
             return Ok(());
         }
-        return Err(Error::InvalidJson);
+        Err(Error::InvalidJson)
     }
 }
 
@@ -104,12 +104,11 @@ impl XDRIn for i64 {
 
     fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
         if jval.is_string() {
-            match jval.to_string().parse::<i64>() {
-                Ok(i_val) => return Ok(i_val),
-                _ => {}
-            };
+            if let Ok(i_val) = jval.to_string().parse::<i64>() {
+                return Ok(i_val);
+            }
         }
-        return Err(Error::HyperBadFormat);
+        Err(Error::HyperBadFormat)
     }
 }
 
@@ -124,12 +123,11 @@ impl XDRIn for u64 {
 
     fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
         if jval.is_string() {
-            match jval.to_string().parse::<u64>() {
-                Ok(i_val) => return Ok(i_val),
-                _ => {}
-            };
+            if let Ok(i_val) = jval.to_string().parse::<u64>() {
+                return Ok(i_val);
+            }
         }
-        return Err(Error::UnsignedHyperBadFormat);
+        Err(Error::UnsignedHyperBadFormat)
     }
 }
 
@@ -184,7 +182,7 @@ impl XDRIn for String {
         if jval.is_string() {
             return Ok(jval.to_string());
         }
-        return Err(Error::StringBadFormat);
+        Err(Error::StringBadFormat)
     }
 }
 
@@ -241,7 +239,7 @@ impl XDRIn for Vec<u8> {
                 _ => return Err(Error::InvalidJson),
             };
         }
-        return Err(Error::InvalidJson);
+        Err(Error::InvalidJson)
     }
 }
 
@@ -250,7 +248,7 @@ pub fn read_fixed_array_json<T: XDRIn>(size: u32, jval: json::JsonValue) -> Resu
     if result.len() as u32 != size {
         return Err(Error::BadArraySize);
     }
-    return Ok(result);
+    Ok(result)
 }
 
 pub fn read_fixed_array<T: XDRIn>(size: u32, buffer: &[u8]) -> Result<(Vec<T>, u64), Error> {
@@ -272,7 +270,7 @@ pub fn read_var_array_json<T: XDRIn>(
     if result.len() as u32 > max_size {
         return Err(Error::BadArraySize);
     }
-    return Ok(result);
+    Ok(result)
 }
 
 pub fn read_var_array<T: XDRIn>(size: u32, buffer: &[u8]) -> Result<(Vec<T>, u64), Error> {
@@ -289,7 +287,7 @@ pub fn read_var_opaque_json(max_size: u32, jval: json::JsonValue) -> Result<Vec<
     if result.len() as u32 > max_size {
         return Err(Error::BadArraySize);
     }
-    return Ok(result);
+    Ok(result)
 }
 
 pub fn read_var_opaque(max_size: u32, buffer: &[u8]) -> Result<(Vec<u8>, u64), Error> {
@@ -309,13 +307,13 @@ pub fn read_fixed_opaque_json(size: u32, jval: json::JsonValue) -> Result<Vec<u8
                 _ => return Err(Error::InvalidJson),
             };
         }
-        return Err(Error::InvalidJson);
+        Err(Error::InvalidJson)
     } else {
         let result = Vec::read_json(jval)?;
         if result.len() as u32 != size {
             return Err(Error::BadArraySize);
         }
-        return Ok(result);
+        Ok(result)
     }
 }
 
@@ -333,14 +331,6 @@ pub fn read_var_string_json(max_size: u32, jval: json::JsonValue) -> Result<Stri
         return Err(Error::BadArraySize);
     }
     Ok(result)
-}
-
-pub fn read_var_string_json(max_size: u32, jval: json::JsonValue) -> Result<String, Error> {
-    let result = String::read_json(jval)?;
-    if result.len() as u32 > max_size {
-        return Err(Error::BadArraySize);
-    }
-    return Ok(result);
 }
 
 pub fn read_var_string(max_size: u32, buffer: &[u8]) -> Result<(String, u64), Error> {
