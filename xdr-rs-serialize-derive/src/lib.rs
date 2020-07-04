@@ -231,7 +231,7 @@ fn get_calls_enum_out_xdr(data: &syn::DataEnum) -> Result<Vec<proc_macro2::Token
             (name, false, i) => {
                 result.push(
                     format!(
-                        "{}(ref val) => {{let mut written = 0; written += {}.write_xdr(out)?; written += val.write_xdr(out)?; Ok(written)}},",
+                        "{}(ref val) => {{let mut written = 0; written += ({} as i32).write_xdr(out)?; written += val.write_xdr(out)?; Ok(written)}},",
                         name, i
                     )
                     .parse()
@@ -250,7 +250,7 @@ fn get_calls_enum_out_json(data: &syn::DataEnum) -> Result<Vec<proc_macro2::Toke
         match (&enu.name, enu.unit, enu.index) {
             (name, true, i) => {
                 result.push(
-                    format!("{} => {}.write_json(out),", name, i)
+                    format!("{} => ({} as i32).write_json(out),", name, i)
                         .parse()
                         .unwrap(),
                 );
@@ -258,7 +258,7 @@ fn get_calls_enum_out_json(data: &syn::DataEnum) -> Result<Vec<proc_macro2::Toke
             (name, false, i) => {
                 result.push(
                     format!(
-                        r#"{}(ref val) => {{let mut written = 0; written += out.write("{{\"enum\":".as_bytes()).unwrap() as u64;  written += {}.write_json(out)?; written += out.write(",\"value\":".as_bytes()).unwrap() as u64; written +=  val.write_json(out)?; written += out.write("}}".as_bytes()).unwrap() as u64; Ok(written)}},"#,
+                        r#"{}(ref val) => {{let mut written = 0; written += out.write("{{\"enum\":".as_bytes()).unwrap() as u64;  written += ({} as i32).write_json(out)?; written += out.write(",\"value\":".as_bytes()).unwrap() as u64; written +=  val.write_json(out)?; written += out.write("}}".as_bytes()).unwrap() as u64; Ok(written)}},"#,
                         name, i
                     )
                     .parse()
