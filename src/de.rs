@@ -916,6 +916,66 @@ mod tests {
     }
 
     #[derive(XDRIn, Debug, PartialEq)]
+    enum TestUnionDiscriminant {
+        #[discriminant(value = "-1")]
+        First(u32),
+        #[discriminant(value = "1")]
+        Second(TestStruct),
+        #[discriminant(value = "2")]
+        Third(()),
+    }
+
+    #[test]
+    fn test_union_discriminant() {
+        let to_des_first: Vec<u8> = vec![255, 255, 255, 255, 0, 0, 0, 3];
+        let expected_first = TestUnionDiscriminant::First(3);
+        let actual_first = TestUnionDiscriminant::read_xdr(&to_des_first).unwrap();
+        assert_eq!((expected_first, 8), actual_first);
+
+        let to_des_second: Vec<u8> = vec![0, 0, 0, 1, 0x3f, 0x80, 0, 0, 0, 0, 0, 2];
+        let expected_second = TestUnionDiscriminant::Second(TestStruct { one: 1.0, two: 2 });
+        let actual_second = TestUnionDiscriminant::read_xdr(&to_des_second).unwrap();
+        assert_eq!((expected_second, 12), actual_second);
+    }
+
+    #[test]
+    fn test_union_discriminant_json() {
+        let to_des = r#"{"enum":-1,"value":3}"#.to_string();
+        let result: TestUnionDiscriminant = read_json_string(to_des).unwrap();
+        assert_eq!(TestUnionDiscriminant::First(3), result);
+
+        let to_des = r#"{"enum":1,"value":{"one": 1.0, "two": 2}}"#.to_string();
+        let result: TestUnionDiscriminant = read_json_string(to_des).unwrap();
+        assert_eq!(
+            TestUnionDiscriminant::Second(TestStruct { one: 1.0, two: 2 }),
+            result
+        );
+
+        let to_des = r#"{"enum":2,"value":""}"#.to_string();
+        let result: TestUnionDiscriminant = read_json_string(to_des).unwrap();
+        assert_eq!(TestUnionDiscriminant::Third(()), result);
+    }
+
+    #[test]
+    fn test_union_discriminant_error() {
+        let to_des_1: Vec<u8> = vec![0, 0, 0, 0, 0x3f, 0x80, 0, 0, 0, 0, 0, 2];
+        assert_eq!(
+            Err(Error::InvalidEnumValue),
+            TestUnionDiscriminant::read_xdr(&to_des_1)
+        );
+
+        let to_des_2: Vec<u8> = vec![255, 255, 255, 255, 0x3f, 0x80];
+        assert_eq!(
+            Err(Error::UnsignedIntegerBadFormat),
+            TestUnionDiscriminant::read_xdr(&to_des_2)
+        );
+
+        let to_des = r#"{"enum":-1,"value": "asdf"}"#.to_string();
+        let result: Result<TestUnionDiscriminant, Error> = read_json_string(to_des);
+        assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
+    }
+
+    #[derive(XDRIn, Debug, PartialEq)]
     pub struct ID {
         #[array(fixed = 32)]
         pub t: Vec<u8>,
