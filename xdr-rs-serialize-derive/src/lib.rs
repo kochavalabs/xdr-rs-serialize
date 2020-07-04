@@ -9,14 +9,14 @@ use syn;
 use syn::Meta::{List, NameValue};
 use syn::NestedMeta::Meta;
 
-#[proc_macro_derive(XDROut, attributes(array))]
+#[proc_macro_derive(XDROut, attributes(array, discriminant))]
 pub fn xdr_out_macro_derive(input: TokenStream) -> TokenStream {
     let ast = syn::parse(input).unwrap();
 
     impl_xdr_out_macro(&ast)
 }
 
-#[proc_macro_derive(XDRIn, attributes(array))]
+#[proc_macro_derive(XDRIn, attributes(array, discriminant))]
 pub fn xdr_in_macro_derive(input: TokenStream) -> TokenStream {
     let ast = syn::parse(input).unwrap();
 
@@ -39,8 +39,8 @@ struct Enum {
     pub index: i32,
 }
 
-fn get_meta_items(attr: &syn::Attribute) -> Option<Vec<syn::NestedMeta>> {
-    if attr.path.segments.len() == 1 && attr.path.segments[0].ident == "array" {
+fn get_meta_items(attr: &syn::Attribute, ident: &str) -> Option<Vec<syn::NestedMeta>> {
+    if attr.path.segments.len() == 1 && attr.path.segments[0].ident == ident {
         match attr.interpret_meta() {
             Some(List(ref meta)) => Some(meta.nested.iter().cloned().collect()),
             _ => None,
@@ -48,6 +48,14 @@ fn get_meta_items(attr: &syn::Attribute) -> Option<Vec<syn::NestedMeta>> {
     } else {
         None
     }
+}
+
+fn get_array_meta_items(attr: &syn::Attribute) -> Option<Vec<syn::NestedMeta>> {
+    get_meta_items(attr, "array")
+}
+
+fn get_discriminant_meta_items(attr: &syn::Attribute) -> Option<Vec<syn::NestedMeta>> {
+    get_meta_items(attr, "discriminant")
 }
 
 fn get_enums(data: &syn::DataEnum) -> Result<Vec<Enum>, ()> {
@@ -68,6 +76,21 @@ fn get_enums(data: &syn::DataEnum) -> Result<Vec<Enum>, ()> {
                 _ => {}
             },
             (syn::Fields::Unnamed(un), None) => {
+                let mut member_index: i32 = index;
+                for meta_items in variant.attrs.iter().filter_map(get_discriminant_meta_items) {
+                    for meta_item in meta_items {
+                        match meta_item {
+                            Meta(NameValue(ref m)) if m.ident == "value" => match m.lit {
+                                syn::Lit::Str(ref val) => {
+                                    member_index = val.value().parse::<i32>().unwrap();
+                                }
+                                _ => {}
+                            },
+                            _ => {}
+                        };
+                    }
+                }
+
                 let types: Vec<_> = un
                     .unnamed
                     .iter()
@@ -85,7 +108,7 @@ fn get_enums(data: &syn::DataEnum) -> Result<Vec<Enum>, ()> {
                 };
                 members.push(Enum {
                     unit: false,
-                    index: index,
+                    index: member_index,
                     name: variant.ident.clone(),
                     e_type: ident,
                 });
@@ -200,7 +223,7 @@ fn get_calls_enum_out_xdr(data: &syn::DataEnum) -> Result<Vec<proc_macro2::Token
         match (&enu.name, enu.unit, enu.index) {
             (name, true, i) => {
                 result.push(
-                    format!("{} => {}.write_xdr(out),", name, i)
+                    format!("{} => ({} as i32).write_xdr(out),", name, i)
                         .parse()
                         .unwrap(),
                 );
@@ -208,7 +231,7 @@ fn get_calls_enum_out_xdr(data: &syn::DataEnum) -> Result<Vec<proc_macro2::Token
             (name, false, i) => {
                 result.push(
                     format!(
-                        "{}(ref val) => {{let mut written = 0; written += {}.write_xdr(out)?; written += val.write_xdr(out)?; Ok(written)}},",
+                        "{}(ref val) => {{let mut written = 0; written += ({} as i32).write_xdr(out)?; written += val.write_xdr(out)?; Ok(written)}},",
                         name, i
                     )
                     .parse()
@@ -227,7 +250,7 @@ fn get_calls_enum_out_json(data: &syn::DataEnum) -> Result<Vec<proc_macro2::Toke
         match (&enu.name, enu.unit, enu.index) {
             (name, true, i) => {
                 result.push(
-                    format!("{} => {}.write_json(out),", name, i)
+                    format!("{} => ({} as i32).write_json(out),", name, i)
                         .parse()
                         .unwrap(),
                 );
@@ -235,7 +258,7 @@ fn get_calls_enum_out_json(data: &syn::DataEnum) -> Result<Vec<proc_macro2::Toke
             (name, false, i) => {
                 result.push(
                     format!(
-                        r#"{}(ref val) => {{let mut written = 0; written += out.write("{{\"enum\":".as_bytes()).unwrap() as u64;  written += {}.write_json(out)?; written += out.write(",\"value\":".as_bytes()).unwrap() as u64; written +=  val.write_json(out)?; written += out.write("}}".as_bytes()).unwrap() as u64; Ok(written)}},"#,
+                        r#"{}(ref val) => {{let mut written = 0; written += out.write("{{\"enum\":".as_bytes()).unwrap() as u64;  written += ({} as i32).write_json(out)?; written += out.write(",\"value\":".as_bytes()).unwrap() as u64; written +=  val.write_json(out)?; written += out.write("}}".as_bytes()).unwrap() as u64; Ok(written)}},"#,
                         name, i
                     )
                     .parse()
@@ -254,7 +277,7 @@ fn get_members(data: &syn::DataStruct) -> Result<Vec<Member>, ()> {
             for field in named.named.iter() {
                 let mut fixed: u32 = 0;
                 let mut var: u32 = 0;
-                for meta_items in field.attrs.iter().filter_map(get_meta_items) {
+                for meta_items in field.attrs.iter().filter_map(get_array_meta_items) {
                     for meta_item in meta_items {
                         match meta_item {
                             Meta(NameValue(ref m)) if m.ident == "fixed" => match m.lit {
