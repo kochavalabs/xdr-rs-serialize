@@ -958,4 +958,51 @@ mod tests {
             .unwrap();
         assert_json!(expected_second, actual_second);
     }
+
+    #[derive(XDROut)]
+    enum TestUnionDiscriminant {
+        #[discriminant(value = "-1")]
+        First(u32),
+        #[discriminant(value = "1")]
+        Second(TestStruct),
+    }
+
+    #[test]
+    fn test_union_discriminant() {
+        let expected_first: Vec<u8> = vec![255, 255, 255, 255, 0, 0, 0, 3];
+        let mut actual_first: Vec<u8> = Vec::new();
+        let written1 = TestUnionDiscriminant::First(3)
+            .write_xdr(&mut actual_first)
+            .unwrap();
+        assert_eq!(expected_first, actual_first);
+        assert_eq!(8, written1);
+
+        let mut actual_second: Vec<u8> = Vec::new();
+        let to_ser = TestStruct { one: 1.0, two: 2 };
+        let expected_second: Vec<u8> = vec![0, 0, 0, 1, 0x3f, 0x80, 0, 0, 0, 0, 0, 2];
+        let written2 = TestUnionDiscriminant::Second(to_ser)
+            .write_xdr(&mut actual_second)
+            .unwrap();
+        assert_eq!(expected_second, actual_second);
+        assert_eq!(12, written2);
+    }
+
+    #[test]
+    fn test_union_discriminant_json() {
+        let expected_first: Vec<u8> = r#"{"enum":-1,"value":3}"#.as_bytes().to_vec();
+        let mut actual_first: Vec<u8> = Vec::new();
+        TestUnionDiscriminant::First(3)
+            .write_json(&mut actual_first)
+            .unwrap();
+        assert_json!(expected_first, actual_first);
+
+        let mut actual_second: Vec<u8> = Vec::new();
+        let to_ser = TestStruct { one: 1.0, two: 2 };
+        let expected_second: Vec<u8> =
+            r#"{"enum":1,"value":{"one":1.0,"two":2}}"#.as_bytes().to_vec();
+        TestUnionDiscriminant::Second(to_ser)
+            .write_json(&mut actual_second)
+            .unwrap();
+        assert_json!(expected_second, actual_second);
+    }
 }
