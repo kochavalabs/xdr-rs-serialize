@@ -243,6 +243,37 @@ impl XDRIn for Vec<u8> {
     }
 }
 
+impl<T> XDRIn for Option<T>
+where
+    T: XDRIn,
+{
+    fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error> {
+        let opted = u32::read_xdr(buffer)?.0;
+        let mut read: u64 = 4;
+        if opted == 0 {
+            Ok((None, read))
+        } else {
+            let value_read = T::read_xdr(&buffer[read as usize..])?;
+            read += value_read.1;
+            let value = Some(value_read.0);
+            Ok((value, read))
+        }
+    }
+
+    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+        match jval {
+            JsonValue::Array(vals) if vals.len() <= 1 => match vals.into_iter().next() {
+                Some(val) => {
+                    let value = T::read_json(val)?;
+                    Ok(Some(value))
+                }
+                None => Ok(None),
+            },
+            _ => Err(Error::InvalidJson),
+        }
+    }
+}
+
 pub fn read_fixed_array_json<T: XDRIn>(size: u32, jval: json::JsonValue) -> Result<Vec<T>, Error> {
     let result = Vec::read_json(jval)?;
     if result.len() as u32 != size {
@@ -862,6 +893,35 @@ mod tests {
         let to_des = r#"{"data": [1, 2, 3, 4]}"#.to_string();
         let result: Result<TestVarArray, Error> = read_json_string(to_des);
         assert_eq!(Err(Error::BadArraySize), result);
+    }
+
+    #[test]
+    fn test_option() {
+        let to_des_none: Vec<u8> = vec![0, 0, 0, 0];
+        let result = Option::<TestEnum>::read_xdr(&to_des_none).unwrap();
+        assert_eq!((None, 4), result);
+
+        let to_des_some: Vec<u8> = vec![0, 0, 0, 1, 0, 0, 0, 2];
+        let result = Option::<TestEnum>::read_xdr(&to_des_some).unwrap();
+        assert_eq!((Some(TestEnum::Two), 8), result);
+    }
+
+    #[test]
+    fn test_option_json() {
+        let to_des_none = r#"[]"#.to_string();
+        let result: Option<TestEnum> = read_json_string(to_des_none).unwrap();
+        assert_eq!(None, result);
+
+        let to_des_some = r#"[2]"#.to_string();
+        let result: Option<TestEnum> = read_json_string(to_des_some).unwrap();
+        assert_eq!(Some(TestEnum::Two), result);
+    }
+
+    #[test]
+    fn test_option_invalid_json() {
+        let to_des = r#"[2, 1]"#.to_string();
+        let result: Result<Option<TestEnum>, Error> = read_json_string(to_des);
+        assert_eq!(Err(Error::InvalidJson), result);
     }
 
     #[derive(XDRIn, Debug, PartialEq)]
