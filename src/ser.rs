@@ -211,6 +211,34 @@ impl XDROut for Vec<u8> {
     }
 }
 
+impl<T> XDROut for Option<T>
+where
+    T: XDROut,
+{
+    fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
+        match self {
+            None => 0u32.write_xdr(out),
+            Some(value) => {
+                let mut written = 1u32.write_xdr(out)?;
+                written += value.write_xdr(out)?;
+                Ok(written)
+            }
+        }
+    }
+    fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
+        match self {
+            None => Ok(out.write(b"[]").unwrap() as u64),
+            Some(value) => {
+                let mut written = 0;
+                written += out.write(b"[").unwrap() as u64;
+                written += value.write_json(out)?;
+                written += out.write(b"]").unwrap() as u64;
+                Ok(written)
+            }
+        }
+    }
+}
+
 impl XDROut for () {
     fn write_xdr(&self, _out: &mut Vec<u8>) -> Result<u64, Error> {
         Ok(0)
