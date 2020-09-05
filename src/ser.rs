@@ -239,6 +239,19 @@ where
     }
 }
 
+impl<T> XDROut for Box<T>
+where
+    T: XDROut,
+{
+    fn write_xdr(&self, mut out: &mut Vec<u8>) -> Result<u64, Error> {
+        (**self).write_xdr(&mut out)
+    }
+
+    fn write_json(&self, mut out: &mut Vec<u8>) -> Result<u64, Error> {
+        (**self).write_json(&mut out)
+    }
+}
+
 impl XDROut for () {
     fn write_xdr(&self, _out: &mut Vec<u8>) -> Result<u64, Error> {
         Ok(0)
@@ -914,6 +927,24 @@ mod tests {
         let expected_some: Vec<u8> = r#"[{"one":1.0,"two":2}]"#.as_bytes().to_vec();
         let mut out = Vec::new();
         Some(to_ser).write_json(&mut out).unwrap();
+        assert_json!(expected_some, out);
+    }
+
+    #[test]
+    fn test_box() {
+        let to_ser = Box::new(TestStruct { one: 1.0, two: 2 });
+        let expected_some: Vec<u8> = vec![0x3f, 0x80, 0, 0, 0, 0, 0, 2];
+        let mut out = Vec::new();
+        to_ser.write_xdr(&mut out).unwrap();
+        assert_eq!(expected_some, out);
+    }
+
+    #[test]
+    fn test_box_json() {
+        let to_ser = Box::new(TestStruct { one: 1.0, two: 2 });
+        let expected_some: Vec<u8> = r#"{"one":1.0,"two":2}"#.as_bytes().to_vec();
+        let mut out = Vec::new();
+        to_ser.write_json(&mut out).unwrap();
         assert_json!(expected_some, out);
     }
 
