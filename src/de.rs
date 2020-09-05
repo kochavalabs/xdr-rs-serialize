@@ -274,6 +274,21 @@ where
     }
 }
 
+impl<T> XDRIn for Box<T>
+where
+    T: XDRIn,
+{
+    fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error> {
+        let (value, read) = T::read_xdr(&buffer)?;
+        Ok((Box::new(value), read))
+    }
+
+    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+        let value = T::read_json(jval)?;
+        Ok(Box::new(value))
+    }
+}
+
 pub fn read_fixed_array_json<T: XDRIn>(size: u32, jval: json::JsonValue) -> Result<Vec<T>, Error> {
     let result = Vec::read_json(jval)?;
     if result.len() as u32 != size {
@@ -922,6 +937,20 @@ mod tests {
         let to_des = r#"[2, 1]"#.to_string();
         let result: Result<Option<TestEnum>, Error> = read_json_string(to_des);
         assert_eq!(Err(Error::InvalidJson), result);
+    }
+
+    #[test]
+    fn test_box() {
+        let to_des_some: Vec<u8> = vec![0, 0, 0, 2];
+        let result = Box::<TestEnum>::read_xdr(&to_des_some).unwrap();
+        assert_eq!((Box::new(TestEnum::Two), 4), result);
+    }
+
+    #[test]
+    fn test_box_json() {
+        let to_des_some = r#"2"#.to_string();
+        let result: Box<TestEnum> = read_json_string(to_des_some).unwrap();
+        assert_eq!(Box::new(TestEnum::Two), result);
     }
 
     #[derive(XDRIn, Debug, PartialEq)]
