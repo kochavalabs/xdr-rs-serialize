@@ -3,6 +3,8 @@ extern crate hex;
 extern crate json;
 
 use crate::error::Error;
+use std::rc::Rc;
+use std::sync::Arc;
 
 use json::JsonValue;
 
@@ -271,6 +273,36 @@ where
             },
             _ => Err(Error::InvalidJson),
         }
+    }
+}
+
+impl<T> XDRIn for Rc<T>
+where
+    T: XDRIn,
+{
+    fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error> {
+        let (value, read) = T::read_xdr(&buffer)?;
+        Ok((Rc::new(value), read))
+    }
+
+    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+        let value = T::read_json(jval)?;
+        Ok(Rc::new(value))
+    }
+}
+
+impl<T> XDRIn for Arc<T>
+where
+    T: XDRIn,
+{
+    fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error> {
+        let (value, read) = T::read_xdr(&buffer)?;
+        Ok((Arc::new(value), read))
+    }
+
+    fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
+        let value = T::read_json(jval)?;
+        Ok(Arc::new(value))
     }
 }
 
@@ -939,19 +971,27 @@ mod tests {
         assert_eq!(Err(Error::InvalidJson), result);
     }
 
-    #[test]
-    fn test_box() {
-        let to_des_some: Vec<u8> = vec![0, 0, 0, 2];
-        let result = Box::<TestEnum>::read_xdr(&to_des_some).unwrap();
-        assert_eq!((Box::new(TestEnum::Two), 4), result);
+    macro_rules! test_wrap {
+        ($name:ident, $name_json:ident, $typ:ident) => {
+            #[test]
+            fn $name() {
+                let to_des: Vec<u8> = vec![0, 0, 0, 2];
+                let result = $typ::<TestEnum>::read_xdr(&to_des).unwrap();
+                assert_eq!(($typ::new(TestEnum::Two), 4), result);
+            }
+
+            #[test]
+            fn $name_json() {
+                let to_des = r#"2"#.to_string();
+                let result: $typ<TestEnum> = read_json_string(to_des).unwrap();
+                assert_eq!($typ::new(TestEnum::Two), result);
+            }
+        };
     }
 
-    #[test]
-    fn test_box_json() {
-        let to_des_some = r#"2"#.to_string();
-        let result: Box<TestEnum> = read_json_string(to_des_some).unwrap();
-        assert_eq!(Box::new(TestEnum::Two), result);
-    }
+    test_wrap!(test_box, test_box_json, Box);
+    test_wrap!(test_rc, test_rc_json, Rc);
+    test_wrap!(test_arc, test_arc_json, Arc);
 
     #[derive(XDRIn, Debug, PartialEq)]
     enum TestUnion {
