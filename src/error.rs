@@ -1,3 +1,6 @@
+use std::error;
+use std::fmt;
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {
     UnknownError,
@@ -24,3 +27,11 @@ pub enum Error {
 
     InvalidJson,
 }
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
+
+impl error::Error for Error {}
