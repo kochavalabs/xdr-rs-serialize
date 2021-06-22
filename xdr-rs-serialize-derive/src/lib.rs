@@ -258,7 +258,7 @@ fn get_calls_enum_out_json(data: &syn::DataEnum) -> Result<Vec<proc_macro2::Toke
             (name, false, i) => {
                 result.push(
                     format!(
-                        r#"{}(ref val) => {{let mut written = 0; written += out.write("{{\"enum\":".as_bytes()).unwrap() as u64;  written += ({} as i32).write_json(out)?; written += out.write(",\"value\":".as_bytes()).unwrap() as u64; written +=  val.write_json(out)?; written += out.write("}}".as_bytes()).unwrap() as u64; Ok(written)}},"#,
+                        r#"{}(ref val) => {{let mut written = 0; written += out.write("{{\"type\":".as_bytes()).unwrap() as u64;  written += ({} as i32).write_json(out)?; written += out.write(",\"data\":".as_bytes()).unwrap() as u64; written +=  val.write_json(out)?; written += out.write("}}".as_bytes()).unwrap() as u64; Ok(written)}},"#,
                         name, i
                     )
                     .parse()
@@ -678,8 +678,8 @@ fn impl_xdr_in_macro(ast: &syn::DeriveInput) -> TokenStream {
                     fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
                         match jval {
                             json::JsonValue::Object(obj) =>  {
-                                let enum_index = i32::read_json(obj.get("enum").ok_or_else(|| Error::InvalidJson)?.clone())?;
-                                let enum_val = obj.get("value").ok_or_else(|| Error::InvalidJson)?;
+                                let enum_index = i32::read_json(obj.get("type").ok_or_else(|| Error::InvalidJson)?.clone())?;
+                                let enum_val = obj.get("data").ok_or_else(|| Error::InvalidJson)?;
                                 match enum_index {
                                     #(#matches_json1)*
                                     _ => Err(Error::InvalidEnumValue)

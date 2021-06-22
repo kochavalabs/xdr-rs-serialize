@@ -1067,7 +1067,7 @@ mod tests {
 
     #[test]
     fn test_union_json() {
-        let expected_first: Vec<u8> = r#"{"enum":0,"value":3}"#.as_bytes().to_vec();
+        let expected_first: Vec<u8> = r#"{"type":0,"data":3}"#.as_bytes().to_vec();
         let mut actual_first: Vec<u8> = Vec::new();
         TestUnion::First(3).write_json(&mut actual_first).unwrap();
         assert_json!(expected_first, actual_first);
@@ -1075,7 +1075,7 @@ mod tests {
         let mut actual_second: Vec<u8> = Vec::new();
         let to_ser = TestStruct { one: 1.0, two: 2 };
         let expected_second: Vec<u8> =
-            r#"{"enum":1,"value":{"one":1.0,"two":2}}"#.as_bytes().to_vec();
+            r#"{"type":1,"data":{"one":1.0,"two":2}}"#.as_bytes().to_vec();
         TestUnion::Second(to_ser)
             .write_json(&mut actual_second)
             .unwrap();
@@ -1112,7 +1112,7 @@ mod tests {
 
     #[test]
     fn test_union_discriminant_json() {
-        let expected_first: Vec<u8> = r#"{"enum":-1,"value":3}"#.as_bytes().to_vec();
+        let expected_first: Vec<u8> = r#"{"type":-1,"data":3}"#.as_bytes().to_vec();
         let mut actual_first: Vec<u8> = Vec::new();
         TestUnionDiscriminant::First(3)
             .write_json(&mut actual_first)
@@ -1122,7 +1122,7 @@ mod tests {
         let mut actual_second: Vec<u8> = Vec::new();
         let to_ser = TestStruct { one: 1.0, two: 2 };
         let expected_second: Vec<u8> =
-            r#"{"enum":1,"value":{"one":1.0,"two":2}}"#.as_bytes().to_vec();
+            r#"{"type":1,"data":{"one":1.0,"two":2}}"#.as_bytes().to_vec();
         TestUnionDiscriminant::Second(to_ser)
             .write_json(&mut actual_second)
             .unwrap();
