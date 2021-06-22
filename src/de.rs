@@ -1015,15 +1015,15 @@ mod tests {
 
     #[test]
     fn test_union_json() {
-        let to_des = r#"{"enum":0,"value":3}"#.to_string();
+        let to_des = r#"{"type":0,"data":3}"#.to_string();
         let result: TestUnion = read_json_string(to_des).unwrap();
         assert_eq!(TestUnion::First(3), result);
 
-        let to_des = r#"{"enum":1,"value":{"one": 1.0, "two": 2}}"#.to_string();
+        let to_des = r#"{"type":1,"data":{"one": 1.0, "two": 2}}"#.to_string();
         let result: TestUnion = read_json_string(to_des).unwrap();
         assert_eq!(TestUnion::Second(TestStruct { one: 1.0, two: 2 }), result);
 
-        let to_des = r#"{"enum":2,"value":""}"#.to_string();
+        let to_des = r#"{"type":2,"data":""}"#.to_string();
         let result: TestUnion = read_json_string(to_des).unwrap();
         assert_eq!(TestUnion::Third(()), result);
     }
@@ -1039,7 +1039,7 @@ mod tests {
             TestUnion::read_xdr(&to_des_2)
         );
 
-        let to_des = r#"{"enum":0,"value": "asdf"}"#.to_string();
+        let to_des = r#"{"type":0,"data": "asdf"}"#.to_string();
         let result: Result<TestUnion, Error> = read_json_string(to_des);
         assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
     }
@@ -1069,18 +1069,18 @@ mod tests {
 
     #[test]
     fn test_union_discriminant_json() {
-        let to_des = r#"{"enum":-1,"value":3}"#.to_string();
+        let to_des = r#"{"type":-1,"data":3}"#.to_string();
         let result: TestUnionDiscriminant = read_json_string(to_des).unwrap();
         assert_eq!(TestUnionDiscriminant::First(3), result);
 
-        let to_des = r#"{"enum":1,"value":{"one": 1.0, "two": 2}}"#.to_string();
+        let to_des = r#"{"type":1,"data":{"one": 1.0, "two": 2}}"#.to_string();
         let result: TestUnionDiscriminant = read_json_string(to_des).unwrap();
         assert_eq!(
             TestUnionDiscriminant::Second(TestStruct { one: 1.0, two: 2 }),
             result
         );
 
-        let to_des = r#"{"enum":2,"value":""}"#.to_string();
+        let to_des = r#"{"type":2,"data":""}"#.to_string();
         let result: TestUnionDiscriminant = read_json_string(to_des).unwrap();
         assert_eq!(TestUnionDiscriminant::Third(()), result);
     }
@@ -1099,7 +1099,7 @@ mod tests {
             TestUnionDiscriminant::read_xdr(&to_des_2)
         );
 
-        let to_des = r#"{"enum":-1,"value": "asdf"}"#.to_string();
+        let to_des = r#"{"type":-1,"data": "asdf"}"#.to_string();
         let result: Result<TestUnionDiscriminant, Error> = read_json_string(to_des);
         assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
     }
