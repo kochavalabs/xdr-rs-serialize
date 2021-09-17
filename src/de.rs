@@ -212,12 +212,14 @@ where
                 Err(_) => return Err(Error::InvalidJson),
             };
         }
+
         match jval {
             JsonValue::Array(vals) => {
                 for val in vals {
                     result.push(T::read_json(val)?);
                 }
             }
+            JsonValue::Null => return Ok(result), // parse null array as empty
             _ => return Err(Error::InvalidJson),
         };
         Ok(result)
@@ -637,6 +639,13 @@ mod tests {
     }
 
     #[test]
+    fn test_var_array_null() {
+        let to_des = "null".to_string();
+        let result: Vec<u32> = read_json_string(to_des).unwrap();
+        assert_eq!(Vec::<u32>::new(), result);
+    }
+
+    #[test]
     fn test_var_array_error() {
         let to_des: Vec<u8> = vec![0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0];
         let result: Result<(Vec<u32>, u64), Error> = Vec::read_xdr(&to_des);
@@ -867,6 +876,42 @@ mod tests {
         let result: TestFixedArray = read_json_string(to_des).unwrap();
         let expected = TestFixedArray {
             data: vec![1, 2, 3],
+        };
+        assert_eq!(expected, result);
+    }
+
+    #[derive(XDRIn, Debug, PartialEq)]
+    struct TestFixedArrayEmpty {
+        #[array(fixed = 0)]
+        pub data: Vec<u32>,
+    }
+
+    #[test]
+    fn test_fixed_array_empty() {
+        let to_des: Vec<u8> = vec![0, 0, 0, 0];
+        let result = TestFixedArrayEmpty::read_xdr(&to_des).unwrap();
+        let expected = TestFixedArrayEmpty {
+            data: vec![],
+        };
+        assert_eq!((expected, 4), result);
+    }
+
+    #[test]
+    fn test_fixed_array_empty_json() {
+        let to_des = r#"{"data": []}"#.to_string();
+        let result: TestFixedArrayEmpty = read_json_string(to_des).unwrap();
+        let expected = TestFixedArrayEmpty {
+            data: vec![],
+        };
+        assert_eq!(expected, result);
+    }
+
+    #[test]
+    fn test_fixed_array_empty_json_null() {
+        let to_des = r#"{"data": null}"#.to_string();
+        let result: TestFixedArrayEmpty = read_json_string(to_des).unwrap();
+        let expected = TestFixedArrayEmpty {
+            data: vec![],
         };
         assert_eq!(expected, result);
     }
