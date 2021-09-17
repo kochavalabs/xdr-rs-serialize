@@ -890,9 +890,7 @@ mod tests {
     fn test_fixed_array_empty() {
         let to_des: Vec<u8> = vec![0, 0, 0, 0];
         let result = TestFixedArrayEmpty::read_xdr(&to_des).unwrap();
-        let expected = TestFixedArrayEmpty {
-            data: vec![],
-        };
+        let expected = TestFixedArrayEmpty { data: vec![] };
         assert_eq!((expected, 4), result);
     }
 
@@ -900,9 +898,7 @@ mod tests {
     fn test_fixed_array_empty_json() {
         let to_des = r#"{"data": []}"#.to_string();
         let result: TestFixedArrayEmpty = read_json_string(to_des).unwrap();
-        let expected = TestFixedArrayEmpty {
-            data: vec![],
-        };
+        let expected = TestFixedArrayEmpty { data: vec![] };
         assert_eq!(expected, result);
     }
 
@@ -910,9 +906,7 @@ mod tests {
     fn test_fixed_array_empty_json_null() {
         let to_des = r#"{"data": null}"#.to_string();
         let result: TestFixedArrayEmpty = read_json_string(to_des).unwrap();
-        let expected = TestFixedArrayEmpty {
-            data: vec![],
-        };
+        let expected = TestFixedArrayEmpty { data: vec![] };
         assert_eq!(expected, result);
     }
 
