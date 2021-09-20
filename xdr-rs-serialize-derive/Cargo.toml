@@ -1,6 +1,6 @@
 [package]
 name = "xdr-rs-serialize-derive"
-version = "0.2.5"
+version = "0.3.0"
 authors = ["Kochavalabs <dev@mazzaroth.io>"]
 description = "XDR object serialization for Rust"
 license = "MIT"
