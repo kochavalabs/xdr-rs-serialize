@@ -40,9 +40,9 @@ struct Enum {
 }
 
 fn get_meta_items(attr: &syn::Attribute, ident: &str) -> Option<Vec<syn::NestedMeta>> {
-    if attr.path.segments.len() == 1 && attr.path.segments[0].ident == ident {
-        match attr.interpret_meta() {
-            Some(List(ref meta)) => Some(meta.nested.iter().cloned().collect()),
+    if attr.path.segments.len() == 1 && attr.path.is_ident(ident) {
+        match attr.parse_meta() {
+            Ok(List(ref meta)) => Some(meta.nested.iter().cloned().collect()),
             _ => None,
         }
     } else {
@@ -67,7 +67,7 @@ fn get_enums(data: &syn::DataEnum) -> Result<Vec<Enum>, ()> {
                 syn::Expr::Lit(ref e_lit) => match e_lit.lit {
                     syn::Lit::Int(ref i_val) => members.push(Enum {
                         unit: true,
-                        index: i_val.value() as i32,
+                        index: i_val.base10_digits().parse::<i32>().unwrap(),
                         name: variant.ident.clone(),
                         e_type: None,
                     }),
@@ -80,7 +80,7 @@ fn get_enums(data: &syn::DataEnum) -> Result<Vec<Enum>, ()> {
                 for meta_items in variant.attrs.iter().filter_map(get_discriminant_meta_items) {
                     for meta_item in meta_items {
                         match meta_item {
-                            Meta(NameValue(ref m)) if m.ident == "value" => match m.lit {
+                            Meta(NameValue(ref m)) if m.path.is_ident("value") => match m.lit {
                                 syn::Lit::Str(ref val) => {
                                     member_index = val.value().parse::<i32>().unwrap();
                                 }
@@ -280,15 +280,15 @@ fn get_members(data: &syn::DataStruct) -> Result<Vec<Member>, ()> {
                 for meta_items in field.attrs.iter().filter_map(get_array_meta_items) {
                     for meta_item in meta_items {
                         match meta_item {
-                            Meta(NameValue(ref m)) if m.ident == "fixed" => match m.lit {
+                            Meta(NameValue(ref m)) if m.path.is_ident("fixed") => match m.lit {
                                 syn::Lit::Int(ref val) => {
-                                    fixed = val.value() as u32;
+                                    fixed = val.base10_digits().parse::<u32>().unwrap();
                                 }
                                 _ => {}
                             },
-                            Meta(NameValue(ref m)) if m.ident == "var" => match m.lit {
+                            Meta(NameValue(ref m)) if m.path.is_ident("var") => match m.lit {
                                 syn::Lit::Int(ref val) => {
-                                    var = val.value() as u32;
+                                    var = val.base10_digits().parse::<u32>().unwrap();
                                 }
                                 _ => {}
                             },

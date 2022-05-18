@@ -1,6 +1,6 @@
 [package]
 name = "xdr-rs-serialize"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Kochavalabs <dev@mazzaroth.io>"]
 description = "XDR object serialization for Rust"
 license = "MIT"
@@ -12,9 +12,9 @@ keywords = ["xdr", "serialization"]
 exclude = [ "example/*", "xdr-rs-serialize-derive/*" ]
 
 [dev-dependencies]
-xdr-rs-serialize-derive = { version = "0.3.0", path = "xdr-rs-serialize-derive" }
+xdr-rs-serialize-derive = { version = "0.3.1", path = "xdr-rs-serialize-derive" }
 
 [dependencies]
-base64 = "0.11.0"
+base64 = "0.13.0"
 hex = "0.4.0"
 json = "0.12.0"
