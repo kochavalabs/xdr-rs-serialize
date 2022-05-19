@@ -21,6 +21,7 @@ pub enum ErrorKind {
     InvalidJson,
 
     Utf8Error(std::str::Utf8Error),
+    IOError(std::io::ErrorKind),
 }
 
 #[derive(Debug, PartialEq)]
@@ -133,5 +134,13 @@ impl Error {
 impl From<std::str::Utf8Error> for Error {
     fn from(utf_err: std::str::Utf8Error) -> Self {
         Error::from_kind(ErrorKind::Utf8Error(utf_err))
+    }
+}
+
+// Convert IO Error by storing only the ErrorKind for display
+// This ensures that our ErrorKind is still clonable
+impl From<std::io::Error> for Error {
+    fn from(io_err: std::io::Error) -> Self {
+        Error::from_kind(ErrorKind::IOError(io_err.kind()))
     }
 }

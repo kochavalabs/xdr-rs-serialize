@@ -314,7 +314,7 @@ fn member_to_json_dict(mem: &Member, skip_name: bool) -> Result<String, ()> {
     let mut lines: Vec<String> = Vec::new();
     if !skip_name {
         let name_str = format!(
-            r#"written += out.write("\"{}\":".as_bytes()).unwrap() as u64;"#,
+            r#"written += out.write("\"{}\":".as_bytes())? as u64;"#,
             mem.name
         );
         lines.push(name_str);
@@ -361,9 +361,9 @@ fn get_calls_struct_out_json(data: &syn::DataStruct) -> Result<Vec<proc_macro2::
         lines.push(member_to_json_dict(&members[0], true)?);
         return Ok(vec![lines.join("\n").parse().unwrap()]);
     }
-    lines.push(r#"written += out.write("{".as_bytes()).unwrap() as u64;"#.to_string());
+    lines.push(r#"written += out.write("{".as_bytes())? as u64;"#.to_string());
     if members.len() == 0 {
-        lines.push(r#"written += out.write("}".as_bytes()).unwrap() as u64;"#.to_string());
+        lines.push(r#"written += out.write("}".as_bytes())? as u64;"#.to_string());
         return Ok(vec![lines.join("\n").parse().unwrap()]);
     }
     let mem = members[0].clone();
@@ -377,7 +377,7 @@ fn get_calls_struct_out_json(data: &syn::DataStruct) -> Result<Vec<proc_macro2::
         lines.push(r#"written += out.write(",".as_bytes()).unwrap() as u64;"#.to_string());
         lines.push(member_to_json_dict(mem, false)?);
     }
-    lines.push(r#"written += out.write("}".as_bytes()).unwrap() as u64;"#.to_string());
+    lines.push(r#"written += out.write("}".as_bytes())? as u64;"#.to_string());
     Ok(vec![lines.join("\n").parse().unwrap()])
 }
 
