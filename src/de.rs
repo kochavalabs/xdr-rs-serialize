@@ -504,7 +504,10 @@ mod tests {
     #[test]
     fn test_uint_error() {
         let to_des: Vec<u8> = vec![255, 255, 255];
-        assert_eq!(Err(Error::unsigned_integer_bad_format()), u32::read_xdr(&to_des));
+        assert_eq!(
+            Err(Error::unsigned_integer_bad_format()),
+            u32::read_xdr(&to_des)
+        );
 
         let to_des = "true".to_string();
         let result: Result<u32, Error> = read_json_string(to_des);
@@ -550,7 +553,10 @@ mod tests {
     #[test]
     fn test_uhyper_error() {
         let to_des: Vec<u8> = vec![255, 255, 255, 255, 255, 255, 255];
-        assert_eq!(Err(Error::unsigned_hyper_bad_format()), u64::read_xdr(&to_des));
+        assert_eq!(
+            Err(Error::unsigned_hyper_bad_format()),
+            u64::read_xdr(&to_des)
+        );
 
         let to_des = "123".to_string();
         let result: Result<u64, Error> = read_json_string(to_des);
@@ -785,9 +791,18 @@ mod tests {
         let to_des2: Vec<u8> = vec![0, 1, 0, 1];
         let to_des3: Vec<u8> = vec![0, 0, 0, 3];
 
-        assert_eq!(Err(Error::invalid_enum_value()), TestEnum::read_xdr(&to_des1));
-        assert_eq!(Err(Error::invalid_enum_value()), TestEnum::read_xdr(&to_des2));
-        assert_eq!(Err(Error::invalid_enum_value()), TestEnum::read_xdr(&to_des3));
+        assert_eq!(
+            Err(Error::invalid_enum_value()),
+            TestEnum::read_xdr(&to_des1)
+        );
+        assert_eq!(
+            Err(Error::invalid_enum_value()),
+            TestEnum::read_xdr(&to_des2)
+        );
+        assert_eq!(
+            Err(Error::invalid_enum_value()),
+            TestEnum::read_xdr(&to_des3)
+        );
 
         let to_des = "4".to_string();
         let result: Result<TestEnum, Error> = read_json_string(to_des);
@@ -1070,7 +1085,10 @@ mod tests {
     #[test]
     fn test_union_error() {
         let to_des_1: Vec<u8> = vec![0, 0, 0, 3, 0x3f, 0x80, 0, 0, 0, 0, 0, 2];
-        assert_eq!(Err(Error::invalid_enum_value()), TestUnion::read_xdr(&to_des_1));
+        assert_eq!(
+            Err(Error::invalid_enum_value()),
+            TestUnion::read_xdr(&to_des_1)
+        );
 
         let to_des_2: Vec<u8> = vec![0, 0, 0, 0, 0x3f, 0x80];
         assert_eq!(
