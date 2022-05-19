@@ -17,17 +17,17 @@ fn pad(written: u64, out: &mut Vec<u8>) -> Result<u64, Error> {
         0 => Ok(0),
         1 => match out.write(&[0]) {
             Ok(1) => Ok(1),
-            _ => Err(Error::InvalidPadding),
+            _ => Err(Error::invalid_padding()),
         },
         2 => match out.write(&[0, 0]) {
             Ok(2) => Ok(2),
-            _ => Err(Error::InvalidPadding),
+            _ => Err(Error::invalid_padding()),
         },
         3 => match out.write(&[0, 0, 0]) {
             Ok(3) => Ok(3),
-            _ => Err(Error::InvalidPadding),
+            _ => Err(Error::invalid_padding()),
         },
-        _ => Err(Error::InvalidPadding),
+        _ => Err(Error::invalid_padding()),
     }
 }
 
@@ -36,7 +36,7 @@ impl XDROut for bool {
         let to_write: u32 = if *self { 1 } else { 0 };
         match out.write(&to_write.to_be_bytes()) {
             Ok(4) => Ok(4),
-            _ => Err(Error::BoolBadFormat),
+            _ => Err(Error::bool_bad_format()),
         }
     }
 
@@ -44,7 +44,7 @@ impl XDROut for bool {
         let to_write = if !self { "false" } else { "true" };
         match out.write(to_write.as_bytes()) {
             Ok(len) => Ok(len as u64),
-            _ => Err(Error::BoolBadFormat),
+            _ => Err(Error::bool_bad_format()),
         }
     }
 }
@@ -53,14 +53,14 @@ impl XDROut for i32 {
     fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         match out.write(&self.to_be_bytes()) {
             Ok(4) => Ok(4),
-            _ => Err(Error::IntegerBadFormat),
+            _ => Err(Error::integer_bad_format()),
         }
     }
     fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         let to_write = self.to_string();
         match out.write(to_write.as_bytes()) {
             Ok(len) => Ok(len as u64),
-            _ => Err(Error::IntegerBadFormat),
+            _ => Err(Error::integer_bad_format()),
         }
     }
 }
@@ -69,14 +69,14 @@ impl XDROut for u32 {
     fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         match out.write(&self.to_be_bytes()) {
             Ok(4) => Ok(4),
-            _ => Err(Error::UnsignedIntegerBadFormat),
+            _ => Err(Error::unsigned_integer_bad_format()),
         }
     }
     fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         let to_write = self.to_string();
         match out.write(to_write.as_bytes()) {
             Ok(len) => Ok(len as u64),
-            _ => Err(Error::IntegerBadFormat),
+            _ => Err(Error::integer_bad_format()),
         }
     }
 }
@@ -85,14 +85,14 @@ impl XDROut for i64 {
     fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         match out.write(&self.to_be_bytes()) {
             Ok(8) => Ok(8),
-            _ => Err(Error::HyperBadFormat),
+            _ => Err(Error::hyper_bad_format()),
         }
     }
     fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         let to_write = format!("\"{}\"", self.to_string());
         match out.write(to_write.as_bytes()) {
             Ok(len) => Ok(len as u64),
-            _ => Err(Error::IntegerBadFormat),
+            _ => Err(Error::integer_bad_format()),
         }
     }
 }
@@ -101,14 +101,14 @@ impl XDROut for u64 {
     fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         match out.write(&self.to_be_bytes()) {
             Ok(8) => Ok(8),
-            _ => Err(Error::UnsignedHyperBadFormat),
+            _ => Err(Error::unsigned_hyper_bad_format()),
         }
     }
     fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         let to_write = format!("\"{}\"", self.to_string());
         match out.write(to_write.as_bytes()) {
             Ok(len) => Ok(len as u64),
-            _ => Err(Error::IntegerBadFormat),
+            _ => Err(Error::integer_bad_format()),
         }
     }
 }
@@ -117,7 +117,7 @@ impl XDROut for f32 {
     fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         match out.write(&self.to_bits().to_be_bytes()) {
             Ok(4) => Ok(4),
-            _ => Err(Error::FloatBadFormat),
+            _ => Err(Error::float_bad_format()),
         }
     }
     fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
@@ -127,7 +127,7 @@ impl XDROut for f32 {
         }
         match out.write(to_write.as_bytes()) {
             Ok(len) => Ok(len as u64),
-            _ => Err(Error::IntegerBadFormat),
+            _ => Err(Error::integer_bad_format()),
         }
     }
 }
@@ -136,7 +136,7 @@ impl XDROut for f64 {
     fn write_xdr(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
         match out.write(&self.to_bits().to_be_bytes()) {
             Ok(8) => Ok(8),
-            _ => Err(Error::DoubleBadFormat),
+            _ => Err(Error::double_bad_format()),
         }
     }
     fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
@@ -146,7 +146,7 @@ impl XDROut for f64 {
         }
         match out.write(to_write.as_bytes()) {
             Ok(len) => Ok(len as u64),
-            _ => Err(Error::IntegerBadFormat),
+            _ => Err(Error::integer_bad_format()),
         }
     }
 }
@@ -205,7 +205,7 @@ impl XDROut for Vec<u8> {
                 written += len as u64;
             }
             _ => {
-                return Err(Error::IntegerBadFormat);
+                return Err(Error::integer_bad_format());
             }
         };
         written += out.write(b"\"").unwrap() as u64;
@@ -366,7 +366,7 @@ impl XDROut for String {
 
 pub fn write_fixed_array<T: XDROut>(val: &[T], size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
     if val.len() as u32 != size {
-        return Err(Error::FixedArrayWrongSize);
+        return Err(Error::fixed_array_wrong_size());
     }
     let mut written: u64 = 0;
     for item in val {
@@ -381,14 +381,14 @@ pub fn write_fixed_array_json<T: XDROut>(
     out: &mut Vec<u8>,
 ) -> Result<u64, Error> {
     if val.len() as u32 != size {
-        return Err(Error::FixedArrayWrongSize);
+        return Err(Error::fixed_array_wrong_size());
     }
     val.write_json(out)
 }
 
 pub fn write_fixed_opaque(val: &Vec<u8>, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
     if val.len() as u32 != size {
-        return Err(Error::FixedArrayWrongSize);
+        return Err(Error::fixed_array_wrong_size());
     }
     out.extend(val);
     let mut written = val.len() as u64;
@@ -399,7 +399,7 @@ pub fn write_fixed_opaque(val: &Vec<u8>, size: u32, out: &mut Vec<u8>) -> Result
 pub fn write_fixed_opaque_json(val: &Vec<u8>, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
     let len = val.len() as u32;
     if len != size {
-        return Err(Error::FixedArrayWrongSize);
+        return Err(Error::fixed_array_wrong_size());
     }
 
     if len <= 64 {
@@ -411,7 +411,7 @@ pub fn write_fixed_opaque_json(val: &Vec<u8>, size: u32, out: &mut Vec<u8>) -> R
                 written += len as u64;
             }
             _ => {
-                return Err(Error::IntegerBadFormat);
+                return Err(Error::integer_bad_format());
             }
         };
         written += out.write(b"\"").unwrap() as u64;
@@ -422,14 +422,14 @@ pub fn write_fixed_opaque_json(val: &Vec<u8>, size: u32, out: &mut Vec<u8>) -> R
 
 pub fn write_var_opaque(val: &Vec<u8>, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
     if val.len() as u32 > size {
-        return Err(Error::BadArraySize);
+        return Err(Error::bad_array_size());
     }
     val.write_xdr(out)
 }
 
 pub fn write_var_opaque_json(val: &Vec<u8>, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
     if val.len() as u32 > size {
-        return Err(Error::BadArraySize);
+        return Err(Error::bad_array_size());
     }
     val.write_json(out)
 }
@@ -440,7 +440,7 @@ pub fn write_var_array<T: XDROut>(
     out: &mut Vec<u8>,
 ) -> Result<u64, Error> {
     if val.len() as u32 > size {
-        return Err(Error::VarArrayWrongSize);
+        return Err(Error::var_array_wrong_size());
     }
     val.write_xdr(out)
 }
@@ -451,21 +451,21 @@ pub fn write_var_array_json<T: XDROut>(
     out: &mut Vec<u8>,
 ) -> Result<u64, Error> {
     if val.len() as u32 > size {
-        return Err(Error::VarArrayWrongSize);
+        return Err(Error::var_array_wrong_size());
     }
     val.write_json(out)
 }
 
 pub fn write_var_string(val: String, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
     if val.len() as u32 > size && size != 0 {
-        return Err(Error::VarArrayWrongSize);
+        return Err(Error::var_array_wrong_size());
     }
     val.write_xdr(out)
 }
 
 pub fn write_var_string_json(val: String, size: u32, out: &mut Vec<u8>) -> Result<u64, Error> {
     if val.len() as u32 > size && size != 0 {
-        return Err(Error::VarArrayWrongSize);
+        return Err(Error::var_array_wrong_size());
     }
     val.write_json(out)
 }
@@ -771,7 +771,7 @@ mod tests {
         };
         let mut actual: Vec<u8> = Vec::new();
         let result = to_ser.write_xdr(&mut actual);
-        assert_eq!(Err(Error::VarArrayWrongSize), result);
+        assert_eq!(Err(Error::var_array_wrong_size()), result);
     }
 
     #[derive(XDROut)]
@@ -865,9 +865,9 @@ mod tests {
         let to_ser = TestFixed::default();
         let mut actual: Vec<u8> = Vec::new();
         let result = to_ser.write_xdr(&mut actual);
-        assert_eq!(Err(Error::FixedArrayWrongSize), result);
+        assert_eq!(Err(Error::fixed_array_wrong_size()), result);
         let result2 = to_ser.write_json(&mut actual);
-        assert_eq!(Err(Error::FixedArrayWrongSize), result2);
+        assert_eq!(Err(Error::fixed_array_wrong_size()), result2);
     }
 
     #[test]
@@ -905,9 +905,9 @@ mod tests {
         to_ser.vector.extend(vec![1, 2, 3, 4]);
         let mut actual: Vec<u8> = Vec::new();
         let result = to_ser.write_xdr(&mut actual);
-        assert_eq!(Err(Error::VarArrayWrongSize), result);
+        assert_eq!(Err(Error::var_array_wrong_size()), result);
         let result2 = to_ser.write_json(&mut actual);
-        assert_eq!(Err(Error::VarArrayWrongSize), result2);
+        assert_eq!(Err(Error::var_array_wrong_size()), result2);
     }
 
     #[test]
@@ -1036,9 +1036,9 @@ mod tests {
     fn test_enum_bad() {
         let mut buffer: Vec<u8> = Vec::new();
         let result = TestEnumBad::Value.write_xdr(&mut buffer);
-        assert_eq!(Err(Error::InvalidEnumValue), result);
+        assert_eq!(Err(Error::invalid_enum_value()), result);
         let result2 = TestEnumBad::Value.write_json(&mut buffer);
-        assert_eq!(Err(Error::InvalidEnumValue), result2);
+        assert_eq!(Err(Error::invalid_enum_value()), result2);
     }
 
     #[derive(XDROut)]

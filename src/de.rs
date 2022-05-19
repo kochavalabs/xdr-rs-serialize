@@ -23,7 +23,7 @@ macro_rules! arr8 {
 pub fn read_json_string<T: XDRIn>(json_str: String) -> Result<T, Error> {
     match json::parse(&json_str) {
         Ok(res) => T::read_json(res),
-        Err(_) => Err(Error::InvalidJson),
+        Err(_) => Err(Error::invalid_json()),
     }
 }
 
@@ -40,7 +40,7 @@ impl XDRIn for () {
         if jval.is_string() && jval == "" {
             return Ok(());
         }
-        Err(Error::InvalidJson)
+        Err(Error::invalid_json())
     }
 }
 
@@ -49,14 +49,14 @@ impl XDRIn for bool {
         match i32::read_xdr(buffer) {
             Ok((1, 4)) => Ok((true, 4)),
             Ok((0, 4)) => Ok((false, 4)),
-            _ => Err(Error::BoolBadFormat),
+            _ => Err(Error::bool_bad_format()),
         }
     }
 
     fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
         match jval {
             JsonValue::Boolean(val) => Ok(val),
-            _ => Err(Error::BoolBadFormat),
+            _ => Err(Error::bool_bad_format()),
         }
     }
 }
@@ -64,7 +64,7 @@ impl XDRIn for bool {
 impl XDRIn for i32 {
     fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error> {
         if buffer.len() < 4 {
-            return Err(Error::IntegerBadFormat);
+            return Err(Error::integer_bad_format());
         }
         let result = i32::from_be_bytes(arr4!(buffer));
         Ok((result, 4))
@@ -73,7 +73,7 @@ impl XDRIn for i32 {
     fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
         match jval {
             JsonValue::Number(val) => Ok(f64::from(val) as i32),
-            _ => Err(Error::IntegerBadFormat),
+            _ => Err(Error::integer_bad_format()),
         }
     }
 }
@@ -81,7 +81,7 @@ impl XDRIn for i32 {
 impl XDRIn for u32 {
     fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error> {
         if buffer.len() < 4 {
-            return Err(Error::UnsignedIntegerBadFormat);
+            return Err(Error::unsigned_integer_bad_format());
         }
         let result = u32::from_be_bytes(arr4!(buffer));
         Ok((result, 4))
@@ -90,7 +90,7 @@ impl XDRIn for u32 {
     fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
         match jval {
             JsonValue::Number(val) => Ok(f64::from(val) as u32),
-            _ => Err(Error::UnsignedIntegerBadFormat),
+            _ => Err(Error::unsigned_integer_bad_format()),
         }
     }
 }
@@ -98,7 +98,7 @@ impl XDRIn for u32 {
 impl XDRIn for i64 {
     fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error> {
         if buffer.len() < 8 {
-            return Err(Error::HyperBadFormat);
+            return Err(Error::hyper_bad_format());
         }
         let result = i64::from_be_bytes(arr8!(buffer));
         Ok((result, 8))
@@ -110,14 +110,14 @@ impl XDRIn for i64 {
                 return Ok(i_val);
             }
         }
-        Err(Error::HyperBadFormat)
+        Err(Error::hyper_bad_format())
     }
 }
 
 impl XDRIn for u64 {
     fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error> {
         if buffer.len() < 8 {
-            return Err(Error::UnsignedHyperBadFormat);
+            return Err(Error::unsigned_hyper_bad_format());
         }
         let result = u64::from_be_bytes(arr8!(buffer));
         Ok((result, 8))
@@ -129,14 +129,14 @@ impl XDRIn for u64 {
                 return Ok(i_val);
             }
         }
-        Err(Error::UnsignedHyperBadFormat)
+        Err(Error::unsigned_hyper_bad_format())
     }
 }
 
 impl XDRIn for f32 {
     fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error> {
         if buffer.len() < 4 {
-            return Err(Error::FloatBadFormat);
+            return Err(Error::float_bad_format());
         }
         let result = f32::from_bits(u32::from_be_bytes(arr4!(buffer)));
         Ok((result, 4))
@@ -145,7 +145,7 @@ impl XDRIn for f32 {
     fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
         match jval {
             JsonValue::Number(val) => Ok(val.into()),
-            _ => Err(Error::FloatBadFormat),
+            _ => Err(Error::float_bad_format()),
         }
     }
 }
@@ -153,7 +153,7 @@ impl XDRIn for f32 {
 impl XDRIn for f64 {
     fn read_xdr(buffer: &[u8]) -> Result<(Self, u64), Error> {
         if buffer.len() < 8 {
-            return Err(Error::DoubleBadFormat);
+            return Err(Error::double_bad_format());
         }
         let result = f64::from_bits(u64::from_be_bytes(arr8!(buffer)));
         Ok((result, 8))
@@ -162,7 +162,7 @@ impl XDRIn for f64 {
     fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
         match jval {
             JsonValue::Number(num) => Ok(num.into()),
-            _ => Err(Error::DoubleBadFormat),
+            _ => Err(Error::double_bad_format()),
         }
     }
 }
@@ -173,9 +173,9 @@ impl XDRIn for String {
         let len = size as usize;
         let mut read: u64 = 4;
         if buffer.len() < len {
-            return Err(Error::StringBadFormat);
+            return Err(Error::string_bad_format());
         }
-        let result = std::str::from_utf8(&buffer[4..len + 4]).unwrap();
+        let result = std::str::from_utf8(&buffer[4..len + 4])?;
         read += size as u64;
         Ok((result.to_string(), read + (4 - read % 4) % 4))
     }
@@ -184,7 +184,7 @@ impl XDRIn for String {
         if jval.is_string() {
             return Ok(jval.to_string());
         }
-        Err(Error::StringBadFormat)
+        Err(Error::string_bad_format())
     }
 }
 
@@ -209,7 +209,7 @@ where
         if jval.is_string() {
             match json::parse(&jval.to_string()) {
                 Ok(res) => return Self::read_json(res),
-                Err(_) => return Err(Error::InvalidJson),
+                Err(_) => return Err(Error::invalid_json()),
             };
         }
 
@@ -220,7 +220,7 @@ where
                 }
             }
             JsonValue::Null => return Ok(result), // parse null array as empty
-            _ => return Err(Error::InvalidJson),
+            _ => return Err(Error::invalid_json()),
         };
         Ok(result)
     }
@@ -240,10 +240,10 @@ impl XDRIn for Vec<u8> {
         if jval.is_string() {
             match base64::decode(jval.to_string().as_bytes()) {
                 Ok(val) => return Ok(val),
-                _ => return Err(Error::InvalidJson),
+                _ => return Err(Error::invalid_json()),
             };
         }
-        Err(Error::InvalidJson)
+        Err(Error::invalid_json())
     }
 }
 
@@ -273,7 +273,7 @@ where
                 }
                 None => Ok(None),
             },
-            _ => Err(Error::InvalidJson),
+            _ => Err(Error::invalid_json()),
         }
     }
 }
@@ -326,7 +326,7 @@ where
 pub fn read_fixed_array_json<T: XDRIn>(size: u32, jval: json::JsonValue) -> Result<Vec<T>, Error> {
     let result = Vec::read_json(jval)?;
     if result.len() as u32 != size {
-        return Err(Error::BadArraySize);
+        return Err(Error::bad_array_size());
     }
     Ok(result)
 }
@@ -348,7 +348,7 @@ pub fn read_var_array_json<T: XDRIn>(
 ) -> Result<Vec<T>, Error> {
     let result = Vec::read_json(jval)?;
     if result.len() as u32 > max_size {
-        return Err(Error::BadArraySize);
+        return Err(Error::bad_array_size());
     }
     Ok(result)
 }
@@ -356,7 +356,7 @@ pub fn read_var_array_json<T: XDRIn>(
 pub fn read_var_array<T: XDRIn>(size: u32, buffer: &[u8]) -> Result<(Vec<T>, u64), Error> {
     let length = u32::read_xdr(buffer)?.0;
     if length > size {
-        return Err(Error::BadArraySize);
+        return Err(Error::bad_array_size());
     }
     let result = read_fixed_array(length, &buffer[4..])?;
     Ok((result.0, result.1 + 4))
@@ -365,7 +365,7 @@ pub fn read_var_array<T: XDRIn>(size: u32, buffer: &[u8]) -> Result<(Vec<T>, u64
 pub fn read_var_opaque_json(max_size: u32, jval: json::JsonValue) -> Result<Vec<u8>, Error> {
     let result = Vec::read_json(jval)?;
     if result.len() as u32 > max_size {
-        return Err(Error::BadArraySize);
+        return Err(Error::bad_array_size());
     }
     Ok(result)
 }
@@ -373,7 +373,7 @@ pub fn read_var_opaque_json(max_size: u32, jval: json::JsonValue) -> Result<Vec<
 pub fn read_var_opaque(max_size: u32, buffer: &[u8]) -> Result<(Vec<u8>, u64), Error> {
     let length = u32::read_xdr(buffer)?.0;
     if length > max_size {
-        return Err(Error::BadArraySize);
+        return Err(Error::bad_array_size());
     }
     let result = read_fixed_opaque(length, &buffer[4..])?;
     Ok((result.0, result.1 + 4))
@@ -384,14 +384,14 @@ pub fn read_fixed_opaque_json(size: u32, jval: json::JsonValue) -> Result<Vec<u8
         if jval.is_string() {
             match hex::decode(jval.to_string().as_bytes()) {
                 Ok(val) => return Ok(val),
-                _ => return Err(Error::InvalidJson),
+                _ => return Err(Error::invalid_json()),
             };
         }
-        Err(Error::InvalidJson)
+        Err(Error::invalid_json())
     } else {
         let result = Vec::read_json(jval)?;
         if result.len() as u32 != size {
-            return Err(Error::BadArraySize);
+            return Err(Error::bad_array_size());
         }
         Ok(result)
     }
@@ -400,7 +400,7 @@ pub fn read_fixed_opaque_json(size: u32, jval: json::JsonValue) -> Result<Vec<u8
 pub fn read_fixed_opaque(size: u32, buffer: &[u8]) -> Result<(Vec<u8>, u64), Error> {
     let padded_size = (4 - size % 4) % 4 + size;
     if buffer.len() < padded_size as usize {
-        return Err(Error::BadArraySize);
+        return Err(Error::bad_array_size());
     }
     Ok((buffer[..size as usize].to_vec(), padded_size as u64))
 }
@@ -408,7 +408,7 @@ pub fn read_fixed_opaque(size: u32, buffer: &[u8]) -> Result<(Vec<u8>, u64), Err
 pub fn read_var_string_json(max_size: u32, jval: json::JsonValue) -> Result<String, Error> {
     let result = String::read_json(jval)?;
     if result.len() as u32 > max_size {
-        return Err(Error::BadArraySize);
+        return Err(Error::bad_array_size());
     }
     Ok(result)
 }
@@ -416,7 +416,7 @@ pub fn read_var_string_json(max_size: u32, jval: json::JsonValue) -> Result<Stri
 pub fn read_var_string(max_size: u32, buffer: &[u8]) -> Result<(String, u64), Error> {
     let length = u32::read_xdr(buffer)?.0;
     if length > max_size {
-        return Err(Error::VarArrayWrongSize);
+        return Err(Error::var_array_wrong_size());
     }
     String::read_xdr(buffer)
 }
@@ -456,13 +456,13 @@ mod tests {
         let err_1: Vec<u8> = vec![0, 0, 0, 2];
         let err_2: Vec<u8> = vec![0, 0, 1, 0];
         let err_3: Vec<u8> = vec![0, 0, 0];
-        assert_eq!(Err(Error::BoolBadFormat), bool::read_xdr(&err_1));
-        assert_eq!(Err(Error::BoolBadFormat), bool::read_xdr(&err_2));
-        assert_eq!(Err(Error::BoolBadFormat), bool::read_xdr(&err_3));
+        assert_eq!(Err(Error::bool_bad_format()), bool::read_xdr(&err_1));
+        assert_eq!(Err(Error::bool_bad_format()), bool::read_xdr(&err_2));
+        assert_eq!(Err(Error::bool_bad_format()), bool::read_xdr(&err_3));
 
         let to_des = "123".to_string();
         let result: Result<bool, Error> = read_json_string(to_des);
-        assert_eq!(Err(Error::BoolBadFormat), result);
+        assert_eq!(Err(Error::bool_bad_format()), result);
     }
 
     #[test]
@@ -481,11 +481,11 @@ mod tests {
     #[test]
     fn test_int_error() {
         let to_des: Vec<u8> = vec![255, 255, 255];
-        assert_eq!(Err(Error::IntegerBadFormat), i32::read_xdr(&to_des));
+        assert_eq!(Err(Error::integer_bad_format()), i32::read_xdr(&to_des));
 
         let to_des = "true".to_string();
         let result: Result<i32, Error> = read_json_string(to_des);
-        assert_eq!(Err(Error::IntegerBadFormat), result);
+        assert_eq!(Err(Error::integer_bad_format()), result);
     }
 
     #[test]
@@ -504,11 +504,11 @@ mod tests {
     #[test]
     fn test_uint_error() {
         let to_des: Vec<u8> = vec![255, 255, 255];
-        assert_eq!(Err(Error::UnsignedIntegerBadFormat), u32::read_xdr(&to_des));
+        assert_eq!(Err(Error::unsigned_integer_bad_format()), u32::read_xdr(&to_des));
 
         let to_des = "true".to_string();
         let result: Result<u32, Error> = read_json_string(to_des);
-        assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
+        assert_eq!(Err(Error::unsigned_integer_bad_format()), result);
     }
 
     #[test]
@@ -527,11 +527,11 @@ mod tests {
     #[test]
     fn test_hyper_error() {
         let to_des: Vec<u8> = vec![255, 255, 255, 255, 255, 255, 255];
-        assert_eq!(Err(Error::HyperBadFormat), i64::read_xdr(&to_des));
+        assert_eq!(Err(Error::hyper_bad_format()), i64::read_xdr(&to_des));
 
         let to_des = "123".to_string();
         let result: Result<i64, Error> = read_json_string(to_des);
-        assert_eq!(Err(Error::HyperBadFormat), result);
+        assert_eq!(Err(Error::hyper_bad_format()), result);
     }
 
     #[test]
@@ -550,11 +550,11 @@ mod tests {
     #[test]
     fn test_uhyper_error() {
         let to_des: Vec<u8> = vec![255, 255, 255, 255, 255, 255, 255];
-        assert_eq!(Err(Error::UnsignedHyperBadFormat), u64::read_xdr(&to_des));
+        assert_eq!(Err(Error::unsigned_hyper_bad_format()), u64::read_xdr(&to_des));
 
         let to_des = "123".to_string();
         let result: Result<u64, Error> = read_json_string(to_des);
-        assert_eq!(Err(Error::UnsignedHyperBadFormat), result);
+        assert_eq!(Err(Error::unsigned_hyper_bad_format()), result);
     }
 
     #[test]
@@ -573,11 +573,11 @@ mod tests {
     #[test]
     fn test_float_error() {
         let to_des: Vec<u8> = vec![255, 255, 255];
-        assert_eq!(Err(Error::FloatBadFormat), f32::read_xdr(&to_des));
+        assert_eq!(Err(Error::float_bad_format()), f32::read_xdr(&to_des));
 
         let to_des = "true".to_string();
         let result: Result<f32, Error> = read_json_string(to_des);
-        assert_eq!(Err(Error::FloatBadFormat), result);
+        assert_eq!(Err(Error::float_bad_format()), result);
     }
 
     #[test]
@@ -596,11 +596,11 @@ mod tests {
     #[test]
     fn test_double_error() {
         let to_des: Vec<u8> = vec![255, 255, 255, 255, 255, 255, 255];
-        assert_eq!(Err(Error::DoubleBadFormat), f64::read_xdr(&to_des));
+        assert_eq!(Err(Error::double_bad_format()), f64::read_xdr(&to_des));
 
         let to_des = "true".to_string();
         let result: Result<f64, Error> = read_json_string(to_des);
-        assert_eq!(Err(Error::DoubleBadFormat), result);
+        assert_eq!(Err(Error::double_bad_format()), result);
     }
 
     #[test]
@@ -649,11 +649,11 @@ mod tests {
     fn test_var_array_error() {
         let to_des: Vec<u8> = vec![0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0];
         let result: Result<(Vec<u32>, u64), Error> = Vec::read_xdr(&to_des);
-        assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
+        assert_eq!(Err(Error::unsigned_integer_bad_format()), result);
 
         let to_des = "[false]".to_string();
         let result: Result<Vec<u32>, Error> = read_json_string(to_des);
-        assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
+        assert_eq!(Err(Error::unsigned_integer_bad_format()), result);
     }
 
     #[derive(XDRIn, PartialEq, Debug)]
@@ -682,15 +682,15 @@ mod tests {
     fn test_struct_error() {
         let to_des: Vec<u8> = vec![0x3f, 0x80, 0, 0, 0, 0, 0];
         let result: Result<(TestStruct, u64), Error> = TestStruct::read_xdr(&to_des);
-        assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
+        assert_eq!(Err(Error::unsigned_integer_bad_format()), result);
 
         let to_des = r#"{"asdf": 1.0, "two": 34}"#.to_string();
         let result: Result<TestStruct, Error> = read_json_string(to_des);
-        assert_eq!(Err(Error::InvalidJson), result);
+        assert_eq!(Err(Error::invalid_json()), result);
 
         let to_des = r#"{"one": true, "two": 34}"#.to_string();
         let result: Result<TestStruct, Error> = read_json_string(to_des);
-        assert_eq!(Err(Error::FloatBadFormat), result);
+        assert_eq!(Err(Error::float_bad_format()), result);
     }
 
     #[test]
@@ -738,13 +738,13 @@ mod tests {
     fn test_string_length_error() {
         let to_des: Vec<u8> = vec![0, 0, 0, 7, 104, 101, 108, 108, 111, 0, 0, 0];
         assert_eq!(
-            Err(Error::VarArrayWrongSize),
+            Err(Error::var_array_wrong_size()),
             TestStringLength::read_xdr(&to_des)
         );
 
         let to_des = r#"{"string": "helloasdfasdfasdfasdf"}"#.to_string();
         let result: Result<TestStringLength, Error> = read_json_string(to_des);
-        assert_eq!(Err(Error::BadArraySize), result);
+        assert_eq!(Err(Error::bad_array_size()), result);
     }
 
     #[derive(XDRIn, Debug, PartialEq)]
@@ -785,13 +785,13 @@ mod tests {
         let to_des2: Vec<u8> = vec![0, 1, 0, 1];
         let to_des3: Vec<u8> = vec![0, 0, 0, 3];
 
-        assert_eq!(Err(Error::InvalidEnumValue), TestEnum::read_xdr(&to_des1));
-        assert_eq!(Err(Error::InvalidEnumValue), TestEnum::read_xdr(&to_des2));
-        assert_eq!(Err(Error::InvalidEnumValue), TestEnum::read_xdr(&to_des3));
+        assert_eq!(Err(Error::invalid_enum_value()), TestEnum::read_xdr(&to_des1));
+        assert_eq!(Err(Error::invalid_enum_value()), TestEnum::read_xdr(&to_des2));
+        assert_eq!(Err(Error::invalid_enum_value()), TestEnum::read_xdr(&to_des3));
 
         let to_des = "4".to_string();
         let result: Result<TestEnum, Error> = read_json_string(to_des);
-        assert_eq!(Err(Error::InvalidEnumValue), result);
+        assert_eq!(Err(Error::invalid_enum_value()), result);
     }
 
     #[derive(XDRIn, Debug, PartialEq)]
@@ -824,11 +824,11 @@ mod tests {
     fn test_fixed_opaque_no_padding_error() {
         let to_des: Vec<u8> = vec![3, 3, 3, 4, 1, 2, 3];
         let result = TestFixedOpaqueNoPadding::read_xdr(&to_des);
-        assert_eq!(Err(Error::BadArraySize), result);
+        assert_eq!(Err(Error::bad_array_size()), result);
 
         let to_des = r#"{"opaque": "t000000000000000"}"#.to_string();
         let result: Result<TestFixedOpaqueNoPadding, Error> = read_json_string(to_des);
-        assert_eq!(Err(Error::InvalidJson), result);
+        assert_eq!(Err(Error::invalid_json()), result);
     }
 
     #[derive(XDRIn, Debug, PartialEq)]
@@ -851,7 +851,7 @@ mod tests {
     fn test_fixed_opaque_padding_error() {
         let to_des: Vec<u8> = vec![3, 3, 3, 4, 1, 0, 0];
         let result = TestFixedOpaquePadding::read_xdr(&to_des);
-        assert_eq!(Err(Error::BadArraySize), result);
+        assert_eq!(Err(Error::bad_array_size()), result);
     }
 
     #[derive(XDRIn, Debug, PartialEq)]
@@ -914,11 +914,11 @@ mod tests {
     fn test_fixed_array_error() {
         let to_des: Vec<u8> = vec![0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
         let result = TestFixedArray::read_xdr(&to_des);
-        assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
+        assert_eq!(Err(Error::unsigned_integer_bad_format()), result);
 
         let to_des = r#"{"data": [1, 2]}"#.to_string();
         let result: Result<TestFixedArray, Error> = read_json_string(to_des);
-        assert_eq!(Err(Error::BadArraySize), result);
+        assert_eq!(Err(Error::bad_array_size()), result);
     }
 
     #[derive(XDRIn, Debug, PartialEq)]
@@ -974,11 +974,11 @@ mod tests {
     fn test_var_too_long() {
         let to_des: Vec<u8> = vec![0, 0, 0, 4];
         let result = TestVarArray::read_xdr(&to_des);
-        assert_eq!(Err(Error::BadArraySize), result);
+        assert_eq!(Err(Error::bad_array_size()), result);
 
         let to_des = r#"{"data": [1, 2, 3, 4]}"#.to_string();
         let result: Result<TestVarArray, Error> = read_json_string(to_des);
-        assert_eq!(Err(Error::BadArraySize), result);
+        assert_eq!(Err(Error::bad_array_size()), result);
     }
 
     #[test]
@@ -1007,7 +1007,7 @@ mod tests {
     fn test_option_invalid_json() {
         let to_des = r#"[2, 1]"#.to_string();
         let result: Result<Option<TestEnum>, Error> = read_json_string(to_des);
-        assert_eq!(Err(Error::InvalidJson), result);
+        assert_eq!(Err(Error::invalid_json()), result);
     }
 
     macro_rules! test_wrap {
@@ -1070,17 +1070,17 @@ mod tests {
     #[test]
     fn test_union_error() {
         let to_des_1: Vec<u8> = vec![0, 0, 0, 3, 0x3f, 0x80, 0, 0, 0, 0, 0, 2];
-        assert_eq!(Err(Error::InvalidEnumValue), TestUnion::read_xdr(&to_des_1));
+        assert_eq!(Err(Error::invalid_enum_value()), TestUnion::read_xdr(&to_des_1));
 
         let to_des_2: Vec<u8> = vec![0, 0, 0, 0, 0x3f, 0x80];
         assert_eq!(
-            Err(Error::UnsignedIntegerBadFormat),
+            Err(Error::unsigned_integer_bad_format()),
             TestUnion::read_xdr(&to_des_2)
         );
 
         let to_des = r#"{"type":0,"data": "asdf"}"#.to_string();
         let result: Result<TestUnion, Error> = read_json_string(to_des);
-        assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
+        assert_eq!(Err(Error::unsigned_integer_bad_format()), result);
     }
 
     #[derive(XDRIn, Debug, PartialEq)]
@@ -1128,19 +1128,19 @@ mod tests {
     fn test_union_discriminant_error() {
         let to_des_1: Vec<u8> = vec![0, 0, 0, 0, 0x3f, 0x80, 0, 0, 0, 0, 0, 2];
         assert_eq!(
-            Err(Error::InvalidEnumValue),
+            Err(Error::invalid_enum_value()),
             TestUnionDiscriminant::read_xdr(&to_des_1)
         );
 
         let to_des_2: Vec<u8> = vec![255, 255, 255, 255, 0x3f, 0x80];
         assert_eq!(
-            Err(Error::UnsignedIntegerBadFormat),
+            Err(Error::unsigned_integer_bad_format()),
             TestUnionDiscriminant::read_xdr(&to_des_2)
         );
 
         let to_des = r#"{"type":-1,"data": "asdf"}"#.to_string();
         let result: Result<TestUnionDiscriminant, Error> = read_json_string(to_des);
-        assert_eq!(Err(Error::UnsignedIntegerBadFormat), result);
+        assert_eq!(Err(Error::unsigned_integer_bad_format()), result);
     }
 
     #[derive(XDRIn, Debug, PartialEq)]
