@@ -258,7 +258,7 @@ fn get_calls_enum_out_json(data: &syn::DataEnum) -> Result<Vec<proc_macro2::Toke
             (name, false, i) => {
                 result.push(
                     format!(
-                        r#"{}(ref val) => {{let mut written = 0; written += out.write("{{\"type\":".as_bytes()).unwrap() as u64;  written += ({} as i32).write_json(out)?; written += out.write(",\"data\":".as_bytes()).unwrap() as u64; written +=  val.write_json(out)?; written += out.write("}}".as_bytes()).unwrap() as u64; Ok(written)}},"#,
+                        r#"{}(ref val) => {{let mut written = 0; written += out.write("{{\"type\":".as_bytes())? as u64;  written += ({} as i32).write_json(out)?; written += out.write(",\"data\":".as_bytes())? as u64; written +=  val.write_json(out)?; written += out.write("}}".as_bytes())? as u64; Ok(written)}},"#,
                         name, i
                     )
                     .parse()
@@ -369,12 +369,12 @@ fn get_calls_struct_out_json(data: &syn::DataStruct) -> Result<Vec<proc_macro2::
     let mem = members[0].clone();
     lines.push(member_to_json_dict(&mem, false)?);
     if members.len() == 1 {
-        lines.push(r#"written += out.write("}".as_bytes()).unwrap() as u64;"#.to_string());
+        lines.push(r#"written += out.write("}".as_bytes())? as u64;"#.to_string());
         return Ok(vec![lines.join("\n").parse().unwrap()]);
     }
 
     for mem in members[1..].iter() {
-        lines.push(r#"written += out.write(",".as_bytes()).unwrap() as u64;"#.to_string());
+        lines.push(r#"written += out.write(",".as_bytes())? as u64;"#.to_string());
         lines.push(member_to_json_dict(mem, false)?);
     }
     lines.push(r#"written += out.write("}".as_bytes())? as u64;"#.to_string());
