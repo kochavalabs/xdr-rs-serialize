@@ -489,7 +489,7 @@ fn get_calls_struct_in_json(data: &syn::DataStruct) -> Result<Vec<proc_macro2::T
             return "jval".to_string();
         }
         format!(
-            r#"obj.unwrap().get("{}").ok_or_else(|| Error::invalid_json())?"#,
+            r#"obj.ok_or_else(|| Error::invalid_json())?.get("{}").ok_or_else(|| Error::invalid_json())?"#,
             i
         )
     };
