@@ -1,6 +1,6 @@
 [package]
 name = "xdr-rs-serialize-derive"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Kochavalabs <dev@mazzaroth.io>"]
 description = "XDR object serialization for Rust"
 license = "MIT"
@@ -11,9 +11,9 @@ edition = "2018"
 keywords = ["xdr", "serialization"]
 
 [dependencies]
-syn = { version = "0.15.12" , features = ["full", "extra-traits", "parsing"] }
-quote = "0.6.8"
-proc-macro2 = "0.4"
+syn = { version = "1.0.95", features = ["full", "extra-traits", "parsing"] }
+quote = "1.0"
+proc-macro2 = "1.0"
 
 [lib]
 name = "xdr_rs_serialize_derive"
