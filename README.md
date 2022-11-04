@@ -35,10 +35,6 @@ fn main() -> Result<(), Error> {
 
 For a more complex example see the code under [example/](https://github.com/kochavalabs/xdr-rs-serialize/tree/develop/example)
 
-## License
-
-[MIT](https://choosealicense.com/licenses/mit/)
-
 ## Notes
 
 - The XDR Quad type is currently not supported
