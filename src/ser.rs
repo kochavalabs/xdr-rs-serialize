@@ -196,7 +196,7 @@ impl XDROut for Vec<u8> {
         Ok(written)
     }
     fn write_json(&self, out: &mut Vec<u8>) -> Result<u64, Error> {
-        let b64 = base64::encode(&self);
+        let b64 = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &self);
         let mut written = 0;
         written += out.write(b"\"").unwrap() as u64;
 
