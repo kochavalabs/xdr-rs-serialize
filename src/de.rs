@@ -238,7 +238,7 @@ impl XDRIn for Vec<u8> {
 
     fn read_json(jval: json::JsonValue) -> Result<Self, Error> {
         if jval.is_string() {
-            match base64::decode(jval.to_string().as_bytes()) {
+            match base64::Engine::decode(&base64::engine::general_purpose::STANDARD, jval.to_string().as_bytes()) {
                 Ok(val) => return Ok(val),
                 _ => return Err(Error::invalid_json()),
             };

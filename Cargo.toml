@@ -15,6 +15,6 @@ exclude = [ "example/*", "xdr-rs-serialize-derive/*" ]
 xdr-rs-serialize-derive = { version = "0.3.1", path = "xdr-rs-serialize-derive" }
 
 [dependencies]
-base64 = "0.13.0"
+base64 = "0.21.0"
 hex = "0.4.0"
 json = "0.12.0"
